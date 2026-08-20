@@ -14,13 +14,16 @@ interface PageThumbnailProps {
   doc: PDFDocumentProxy
   isSelected: boolean
   onSelect: (pageId: string) => void
+  onRotate: (pageId: string) => void
+  onDelete: (pageId: string) => void
 }
 
 /**
  * One canvas-rendered thumbnail in the page grid, labeled with its page
- * number and draggable (via the handle) to reorder the working set.
+ * number, draggable (via the handle) to reorder the working set, and
+ * carrying its own rotate/delete actions.
  */
-export function PageThumbnail({ page, doc, isSelected, onSelect }: PageThumbnailProps) {
+export function PageThumbnail({ page, doc, isSelected, onSelect, onRotate, onDelete }: PageThumbnailProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
 
@@ -34,12 +37,12 @@ export function PageThumbnail({ page, doc, isSelected, onSelect }: PageThumbnail
 
     setStatus('loading')
     const scale = THUMBNAIL_SCALE * (window.devicePixelRatio || 1)
-    const handle = renderPageToCanvas(doc, page.sourcePageNumber, canvas, scale)
+    const handle = renderPageToCanvas(doc, page.sourcePageNumber, canvas, scale, page.rotation)
 
     handle.promise.then(() => setStatus('ready')).catch(() => setStatus('error'))
 
     return () => handle.cancel()
-  }, [doc, page.sourcePageNumber])
+  }, [doc, page.sourcePageNumber, page.rotation])
 
   return (
     <div
@@ -67,6 +70,37 @@ export function PageThumbnail({ page, doc, isSelected, onSelect }: PageThumbnail
           <circle cx="15" cy="18" r="1.4" />
         </svg>
       </button>
+
+      <div className="absolute right-1.5 top-1.5 z-10 flex gap-1">
+        <button
+          type="button"
+          onClick={() => onRotate(page.id)}
+          aria-label="Rotate page 90°"
+          className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4" aria-hidden="true">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M4 4v5h5M20 20v-5h-5M4.5 9A8 8 0 0 1 19 8M19.5 15a8 8 0 0 1-14.5 1"
+            />
+          </svg>
+        </button>
+        <button
+          type="button"
+          onClick={() => onDelete(page.id)}
+          aria-label="Delete page"
+          className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4" aria-hidden="true">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M6 7h12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13"
+            />
+          </svg>
+        </button>
+      </div>
 
       <button
         type="button"

@@ -1,0 +1,186 @@
+# Diary: Multi-file workspace, drag-and-drop reorder, and PDF export
+
+Goal: implement Phase 1 and Phase 2 of `/IMPLEMENTATION_PLAN.md` — turning the
+single-file, view-only viewer shipped in the bootstrap session into a
+multi-file workspace where pages from several uploaded PDFs pool into one
+thumbnail grid, can be freely dragged into any order (including across the
+files they came from), and can be downloaded as one real, merged PDF. This
+is the first iteration where the tool produces actual output, not just an
+in-browser demo.
+
+## Step 1: Multi-file upload + drag-and-drop reorder (Phase 1)
+
+**Author:** main
+
+### Prompt Context
+
+**Verbatim prompt:** `/suggest-next-iteration use @IMPLEMENTATION_PLAN.md if needed more details.`
+**Interpretation:** Scan the codebase against `/PRD.md` and `/CONSTITUTION.md`, propose 2-3 concrete next iterations, and let the user pick one via `AskUserQuestion`. The user selected "Phase 1 only: multi-file + drag reorder" — rename the viewer feature to a workspace, introduce the flat-pages data model, make upload additive/multi-file, and add dnd-kit cross-file drag reordering, explicitly *without* export/download yet.
+**Inferred intent:** Follow the plan's own phase boundaries rather than jumping ahead — get the riskiest new mechanic (drag-and-drop across file boundaries) visually verified before building the export pipeline on top of it.
+
+### What I did
+
+- Confirmed `/PRD.md` and `/CONSTITUTION.md` both existed and read them, then scanned `/src` to confirm the codebase still matched the plan's documented baseline (single-file `/src/features/viewer/`, no `@dnd-kit/*`, `@pdfme/pdf-lib`, or `client-zip` installed).
+- Renamed `/src/features/viewer/` to `/src/features/workspace/` via `git mv`, and `PdfViewer.tsx` to `Workspace.tsx`; updated the import in `/src/App.tsx`.
+- Installed `@dnd-kit/core@6.3.1`, `@dnd-kit/sortable@10.0.0`, `@dnd-kit/utilities@3.2.2` — the plan is explicit that these are the "legacy"-generation packages (`DndContext`/`SortableContext`), not the newer `@dnd-kit/react`/`@dnd-kit/dom` rewrite that dndkit.com's current docs default to.
+- Added the shared data model from the plan: `/src/features/workspace/types.ts` (`SourceFile`, `WorkingPage`, `PdfRect`, `PageEdit`, `WorkspaceState`), `/src/features/workspace/workspaceReducer.ts` (`ADD_FILES`, `REORDER_PAGES`, `DELETE_PAGE`, `ROTATE_PAGE`, `RESET` — the last two unused until Phase 3, but included now since the plan treats the reducer shape as shared architecture introduced once), and context plumbing split across `/src/features/workspace/WorkspaceContext.tsx` (the `WorkspaceProvider`) and `/src/features/workspace/useWorkspace.ts` (the context object + hook).
+- Added `/src/features/workspace/loadSourceFiles.ts`, a small async helper that turns a batch of picked/dropped `File`s into `SourceFile[]` + `WorkingPage[]` via `Promise.all`, so a whole batch either loads or falls through to one generic error state together.
+- Rewrote `/src/features/workspace/UploadDropzone.tsx` to accept multiple files (`multiple` attribute, iterating `dataTransfer.files`) and renamed its callback to `onFilesSelected`.
+- Rewrote `/src/features/workspace/ThumbnailGrid.tsx` to wrap the grid in `DndContext`/`SortableContext` with a `PointerSensor` (8px activation distance so clicks still select instead of always dragging), and `/src/features/workspace/PageThumbnail.tsx` to become a `useSortable` consumer with a dedicated grip-icon drag handle separate from the click-to-select button.
+- Rewrote `/src/features/workspace/PagePreview.tsx` to work off a `WorkingPage` + resolved `doc` instead of a single ambient document, and rewrote `/src/features/workspace/Workspace.tsx` as the top-level screen: wraps children in `WorkspaceProvider`, handles additive upload with a small inline loading/error banner (rather than a full-screen block once pages already exist), and added "Add more files" / "Clear all" (with a `window.confirm` guard) header controls in place of the old single "Upload a different file" reset link.
+
+### Why
+
+The plan calls out that a flat `pages` array spanning every uploaded file — rather than pages nested under files — is what makes "drag a page from file B in between two pages of file A" just an ordinary array move, with no cross-file special case to write. Building that data model and the additive-upload/dnd-kit plumbing first, and deliberately deferring export, matches the project's own "get something visual running first" principle: the goal of this step was to prove the reorder mechanic works before spending effort on the pdf-lib pipeline.
+
+### What worked
+
+- `tsc -b` and `eslint .` passed cleanly on the first real attempt once the reducer/context/types files were in place — the shared data model translated directly from the plan's TypeScript sketches with no surprises.
+- Splitting the context object + hook (`/src/features/workspace/useWorkspace.ts`) out of the `WorkspaceProvider` component (`/src/features/workspace/WorkspaceContext.tsx`) cleanly resolved an `eslint-plugin-react-refresh` complaint (see below) without needing a disable comment.
+- Using Playwright directly (installed on the fly via `npm install` inside the job's scratch tmp dir, since neither a project-specific `run` skill nor `chromium-cli` was available in this environment) against the Vite dev server was a reliable way to actually prove the drag-and-drop worked, rather than trusting the code by inspection.
+
+### What didn't work
+
+Running `npx eslint .` right after adding `/src/features/workspace/WorkspaceContext.tsx` (when it still exported both the `WorkspaceProvider` component and the `useWorkspace` hook from the same file) failed with:
+
+```
+/Users/pratiksharma/repos/pdf-editor/src/features/workspace/WorkspaceContext.tsx
+  19:17  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+```
+
+Fixed by moving `createContext`/`useContext`/the `useWorkspace` hook into their own file (`/src/features/workspace/useWorkspace.ts`), leaving `WorkspaceContext.tsx` exporting only the `WorkspaceProvider` component.
+
+The much bigger failure was that **the drag-and-drop didn't actually work at all**, despite looking correct in code review. I wrote a Playwright script (`test_dnd.mjs` in the job's scratch tmp dir) that uploaded two hand-generated sample PDFs (`file-a.pdf`, `file-b.pdf`, built with a small inline Python script that hand-writes a minimal valid PDF with literal, uncompressed `Tj` text operators so each page's content is greppable later) and simulated a mouse-based drag from one thumbnail's drag handle to another's position. Before and after screenshots were pixel-identical — nothing moved.
+
+I debugged this in stages:
+1. First suspected the drop target coordinates were wrong (I was initially aiming for a point far outside any droppable region, `tx - 100` computed from the tiny 24×24 handle's box rather than the full thumbnail card's box) — fixed the test to target the card's bounding box, but the drag still didn't visually activate (no drag overlay, no opacity change on the dragged card in a mid-drag screenshot).
+2. Added a capturing `window.addEventListener('pointerdown'/'pointermove'/'pointerup', ..., true)` diagnostic and confirmed native pointer events *were* firing, well past dnd-kit's 8px activation-constraint distance, with `isPrimary: true` and `button: 0` — so the sensor's own activation guard (`if (!event.isPrimary || event.button !== 0) return false` in dnd-kit's `PointerSensor.activators`, `/node_modules/@dnd-kit/core/dist/core.cjs.development.js`) should have accepted it.
+3. The actual cause, found via `document.elementFromPoint(x, y)` at the handle's own bounding-box center: the point resolved to the *canvas container `<div>`* inside the neighboring select-button, not the drag handle's `<button>`. The handle (`className="absolute left-1.5 top-1.5 ..."`) had `position: absolute` but no explicit `z-index`, and the canvas container div also has non-static positioning (`position: relative`, needed for its own loading/error overlays) — with both at `z-index: auto`, paint order between positioned siblings-in-effect falls back to DOM order, and the canvas div comes later in the tree than the handle button. So the visually-topmost element at that pixel, and the one actually receiving pointer events, was the canvas div sitting *underneath* what looked like the handle — the six-dot grip icon was being fully occluded.
+
+### What I learned
+
+`position: absolute` does not automatically win the stacking order against a later sibling that merely has `position: relative` — with `z-index: auto` on both, paint (and hit-test) order among positioned elements falls back to document order, not to which one has the "stronger" positioning scheme. This is exactly the kind of failure that's invisible from a static code read and only shows up when you actually click at the coordinates a user would — which is why the visual/interactive verification step mattered here far more than the typecheck or lint passing.
+
+### What was tricky
+
+Confirming the actual root cause required going one level below "does clicking do the right thing" down to "what DOM node is literally at this pixel and what event properties does the native pointerdown carry" — screenshots alone weren't enough since the misplaced handle was invisible either way (fully covered), so the bug looked identical to "the drag just doesn't work" until `elementFromPoint` and a raw event-property dump pinned it down.
+
+### What warrants review
+
+- The z-index fix in `/src/features/workspace/PageThumbnail.tsx` (`className="absolute left-1.5 top-1.5 z-10 flex h-6 w-6 ..."` on the drag handle) is a one-line change but is load-bearing for the entire drag feature — worth a deliberate look, since it's the kind of fix that's easy to accidentally revert during a later styling pass without realizing what it protects against.
+- The `ADD_FILES`/`REORDER_PAGES` path in `/src/features/workspace/workspaceReducer.ts` also defines `DELETE_PAGE`/`ROTATE_PAGE`/`RESET` action types that nothing dispatches yet outside of `RESET` (wired to "Clear all") — intentional, per the plan's "shared architecture" framing, but worth confirming that's still the desired call when Phase 3 actually lands.
+
+### Future work
+
+Phase 3 (delete/rotate) can now dispatch the already-defined `DELETE_PAGE`/`ROTATE_PAGE` actions from real UI; Phase 4 (undo/redo) wraps the same reducer. Both were anticipated by this step's data model but deliberately left unimplemented here.
+
+## Step 2: PDF export/download pipeline (Phase 2)
+
+**Author:** main
+
+### Prompt Context
+
+**Verbatim prompt:** `/suggest-next-iteration use @IMPLEMENTATION_PLAN.md if needed more details.`
+**Interpretation:** Re-ran the same suggest-next-iteration flow in a later turn of the same session (codebase now reflecting Step 1, committed as `ca57e13`). Proposed Phase 2 (export/download) alone, Phase 3 (delete/rotate, visual-only) alone, or both combined; the user picked "Phase 2 only: real PDF export/download" — add `@pdfme/pdf-lib`, `buildPdf`/`downloadBytes`, and a Download button, explicitly excluding delete/rotate/undo.
+**Inferred intent:** Complete the first fully real, end-to-end user story (merge) before adding more page-level operations — verify the export pipeline against the already-working cross-file reorder from Step 1 rather than letting more in-memory-only features stack up.
+
+### What I did
+
+- Installed `@pdfme/pdf-lib@6.1.12` and confirmed its exports resolve correctly under this project's `tsconfig` (`PDFDocument`, `degrees`) by writing the real implementation and running `tsc -b` against it rather than probing the package in isolation.
+- Added `/src/lib/pdfExport.ts`: `buildPdf(sourceFiles, pages)` builds a fresh `PDFDocument`, walks `pages` in current working-set order, and for each page loads (or reuses, via a `Map` scoped to that one call) the source file's pdf-lib document, copies the single page via `copyPages`, applies `workingPage.rotation` on top of whatever rotation the page already had via `setRotation(degrees(...))`, and appends it to the output. Raw file bytes are cached in a module-level `Map<string, Promise<ArrayBuffer>>` keyed by `SourceFile.id` (not mutated onto the `SourceFile` object itself, since that's reducer-owned state) so a session that calls `buildPdf` more than once doesn't re-read the same `File` from disk repeatedly. `downloadBytes(bytes, filename)` wraps the bytes in a `Blob`, drives a detached `<a download>` click, and revokes the object URL on the next tick.
+- Deliberately did *not* implement the "apply `PageEdit`s" half of the plan's `buildPdf` spec (drawing occluding rectangles + replacement text/images) — `edits` is always `[]` until Phase 7/8 exist to produce them, so that code path has nothing to exercise yet and the plan itself defers the exact mechanics to those phases.
+- Wired a "Download" button into `/src/features/workspace/Workspace.tsx`'s header (styled as the one solid/primary button among the otherwise text-link controls), with `isExporting` state swapping its label to "Building…" and disabling it mid-export, and a dismissible error banner (reusing the same visual pattern as the existing upload-error banner) if `buildPdf` throws.
+
+### Why
+
+`buildPdf` always rebuilds from the source files' original bytes plus whatever `pages` currently holds, so every future call to it — download now, extract or split later — reflects the complete, current state with no separate save step, exactly as the plan specifies. Keeping the raw-bytes cache external to the `SourceFile` object (rather than mutating a field onto it) avoids touching reducer-owned state from a module that isn't itself part of the reducer.
+
+### What worked
+
+Verifying this end-to-end turned out to be straightforward once Step 1's Playwright setup already existed: reused the same drag-and-drop sequence, then awaited `page.waitForEvent('download')` alongside clicking the Download button, saved the resulting file, and checked it two ways — `strings downloaded-merged.pdf | grep "File [AB] - Page"` showed the literal `Tj` text operators in exactly the reordered sequence (File B‑p1, File A‑p1, File A‑p2, File B‑p2), and then, as a stronger check that the file wasn't just superficially plausible, re-uploading that same downloaded file back into the app itself and confirming it parsed as one clean 4-page document in that same order. That second check is a nice trick specific to this project: since the app already embeds a fully capable pdf.js reader, using the app itself to validate its own export output is both simple and a genuinely independent proof that the file is structurally valid, not just that grep found the right strings in the right order.
+
+### What didn't work
+
+`npx tsc -b` failed immediately after writing `downloadBytes`:
+
+```
+src/lib/pdfExport.ts:58:26 - error TS2322: Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BlobPart'.
+  Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
+    Types of property 'buffer' are incompatible.
+      Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
+        Type 'SharedArrayBuffer' is not assignable to type 'ArrayBuffer'.
+          Types of property '[Symbol.toStringTag]' are incompatible.
+            Type '"SharedArrayBuffer"' is not assignable to type '"ArrayBuffer"'.
+
+58   const blob = new Blob([bytes], { type: 'application/pdf' })
+                            ~~~~~
+```
+
+`PDFDocument.save()` returns a `Uint8Array<ArrayBufferLike>` (TypeScript's now-generic typed-array types, generic over the buffer flavor), which the DOM lib's `BlobPart` type doesn't accept directly since it can't rule out a `SharedArrayBuffer` backing it. Fixed by constructing a fresh, concretely-`ArrayBuffer`-backed copy first: `new Blob([new Uint8Array(bytes)], { type: 'application/pdf' })`.
+
+### What I learned
+
+This `Uint8Array<ArrayBufferLike>` vs `BlobPart` mismatch is a fairly generic friction point with recent TypeScript/DOM-lib versions (this project is on TypeScript ~6.0.2) whenever a third-party library's typed-array return value isn't pinned to the concrete `ArrayBuffer` generic — worth remembering as a quick, safe fix (`new Uint8Array(x)`) rather than reaching for a type assertion.
+
+### What was tricky
+
+Nothing else about this step was particularly tricky mechanically — the main risk (does the export actually preserve the reordered, cross-file page sequence correctly) was exactly what Step 1's already-working drag-and-drop let me test directly, rather than needing to newly stand up test fixtures.
+
+### What warrants review
+
+- `/src/lib/pdfExport.ts`'s module-level `rawBytesCache` persists for the lifetime of the page/tab. It's keyed by `SourceFile.id`, which is only ever created fresh via `crypto.randomUUID()` in `/src/features/workspace/loadSourceFiles.ts`, so there's no realistic key collision risk within one session — but it does mean the cache grows unboundedly across a very long single-page session with many uploads. Not a real problem at this app's intended scale (a small team's ad-hoc daily PDF chores per the PRD), but worth knowing it's there if that assumption ever changes.
+- The error path in `handleDownload` (`/src/features/workspace/Workspace.tsx`) catches broadly and shows one generic message; if `buildPdf` starts failing in practice it'd be worth checking the browser console for the underlying error, since nothing here logs it.
+
+### Future work
+
+Phase 5 (extract selected pages) and Phase 6 (split into zipped files) are both meant to reuse `buildPdf` unchanged against a filtered/partitioned subset of `pages`, per the plan — this step's implementation should need no changes to support either.
+
+## Step 3: Delete and rotate individual pages (Phase 3)
+
+**Author:** main
+
+### Prompt Context
+
+**Verbatim prompt:** `/suggest-next-iteration and use @IMPLEMENTATION_PLAN.md for detailing,.`
+**Interpretation:** Re-ran the suggest-next-iteration flow in a new session (after `/clear` and `/diary`), with the codebase reflecting Steps 1 and 2 (committed as `ca57e13` and `f4685d0`). Confirmed `PRD.md`/`CONSTITUTION.md` both exist and that `workspaceReducer.ts` already defines `DELETE_PAGE`/`ROTATE_PAGE` unused by any UI yet. Proposed Phase 3 (delete/rotate) alone, Phase 3+4 combined (delete/rotate plus undo/redo), or Phase 5 alone (extract selected pages); the user picked "Phase 3: Delete & rotate pages" — wire the two already-defined reducer actions to real thumbnail UI, nothing more.
+**Inferred intent:** Ship the smallest slice that makes the already-built reducer plumbing actually reachable from the UI, rather than bundling it with undo/redo (Phase 4) or jumping ahead to extract (Phase 5) before this one's done.
+
+### What I did
+
+- Extended `renderPageToCanvas` in `/src/lib/pdf.ts` with a fifth, optional `additionalRotation: 0 | 90 | 180 | 270 = 0` parameter, added on top of the page's own baked-in `page.rotate` (not replacing it) when computing the viewport: `page.getViewport({ scale, rotation: (page.rotate + additionalRotation) % 360 })` — exactly the plan's Phase 3 spec, and consistent with how `/src/lib/pdfExport.ts`'s `buildPdf` already adds `workingPage.rotation` on top of `copiedPage.getRotation().angle` rather than overwriting it.
+- Wired `page.rotation` through both render call sites — `/src/features/workspace/PageThumbnail.tsx` and `/src/features/workspace/PagePreview.tsx` — as the new fifth argument, and added `page.rotation` to both effects' dependency arrays so a rotate re-renders the canvas immediately.
+- Added a rotate button and a delete button as a small top-right icon-button group in `PageThumbnail.tsx`, mirroring the existing top-left drag-handle's always-visible (not hover-gated) styling so the affordance is consistent and doesn't rely on hover working on touch devices. Threaded `onRotate`/`onDelete` callbacks through `/src/features/workspace/ThumbnailGrid.tsx` down to each `PageThumbnail`.
+- Wired the two callbacks in `/src/features/workspace/Workspace.tsx`: `handleRotatePage` dispatches `ROTATE_PAGE` with `delta: 90`; `handleDeletePage` dispatches `DELETE_PAGE` and additionally patches `selectedPageId` — if the deleted page was the one currently selected, it selects the page that's now at the same index (or the new last page, if the deleted one was last) instead of leaving `selectedPageId` pointing at a page that no longer exists, which would otherwise blank the preview pane rather than showing something.
+- Made no reducer or export-pipeline changes — `DELETE_PAGE`/`ROTATE_PAGE` and their rotation-compositing behavior in `buildPdf` were both already correct from Step 1/2's "shared architecture introduced once" framing; this step was purely UI wiring.
+
+### Why
+
+The plan explicitly designed the reducer's action set and `buildPdf`'s rotation math up front (Step 1/2) so that Phase 3 would need no changes to either — only new UI dispatching actions that already existed. Keeping this step to UI-only changes matches that intent and kept the diff small and easy to review in isolation from the reducer/export internals.
+
+### What worked
+
+- Because the hard part (the reducer actions and the export pipeline's additive rotation) was already built and diaried in Step 1/2, this step really was just plumbing — `tsc -b` and `eslint .` both passed on the first attempt.
+- Playwright verification (same pattern as Steps 1/2: launch the Vite dev server, drive the real UI, inspect real output) caught what static review couldn't: generated fresh sample PDFs with rectangular (200×300, not square) pages specifically so a 90° rotation would be visually unambiguous — a square page's canvas wouldn't change dimensions on rotate, silently hiding a rendering bug. Confirmed the thumbnail canvas's bounding box flipped from `{width: 60, height: 90}` to `{width: 90, height: 60}` after clicking rotate.
+- Went one step further than a visual check: after rotating one page and deleting another, clicked Download and loaded the resulting file back into `@pdfme/pdf-lib` in a plain Node script (reusing the project's own installed dependency rather than reaching for an external PDF tool — no `pdfinfo`/`qpdf`/`mutool`/`pypdf` were available in this environment) to assert on the exported bytes directly: `doc.getPageCount()` was 4 (down from 5 — the deleted page is genuinely absent, not just hidden), `doc.getPages()[0].getRotation().angle` was `90` (baked into the file, not just a CSS/canvas-level visual change), and `strings exported.pdf | grep "File"` showed the surviving pages' content in the right order (`File A - Page 1`, `File A - Page 3`, `File B - Page 1`, `File B - Page 2`). This directly verifies the plan's Phase 3 "Done when" criterion about the rotation/deletion actually landing in the downloaded file, not just the in-browser view.
+- Also verified deleting every page of a single-file upload correctly falls back to the empty-state dropzone (`pages.length === 0` in `Workspace.tsx` already gated on this from Step 1 — no new condition needed).
+
+### What didn't work
+
+Nothing failed outright this step. One test-script-level false alarm: an early assertion compared the header's page-count text against the literal string `'5 pages'`, but the header actually renders `'2 files · 5 pages'` — the mismatch was in the throwaway Playwright script's expectation, not the app; fixed by reading the real rendered text before asserting on it, rather than guessing the format. Similarly, a first attempt to confirm the empty-state dropzone reappeared used the regex `/drag.*drop/i` against copy that actually reads "Drop one or more PDFs here, or click to choose files" (drop before any mention of drag) — the regex, not the app, was wrong; a second check against the literal visible copy confirmed the dropzone does reappear.
+
+### What I learned
+
+Testing rotation against a square source page is a trap: a square canvas's bounding box doesn't change dimensions on a 90°/270° rotation, so a broken rotation (one that silently doesn't apply) and a working one can look identical in a screenshot taken only before/after. Using rectangular sample pages made the rotation's effect (width/height swap) mechanically unmissable rather than something that had to be eyeballed pixel-by-pixel.
+
+### What was tricky
+
+Nothing about the implementation itself was tricky — this was the first phase since bootstrap where the "hard part" had already been solved in a prior step, so this one was close to pure UI wiring. The only real care needed was in designing the verification (rectangular pages, checking the actual exported bytes rather than trusting the in-browser view), which is exactly the lesson Step 1's z-index bug had already taught: a code read alone wouldn't have caught a broken rotation any more than it caught the buried drag handle.
+
+### What warrants review
+
+- The delete-selected-page reselection logic in `handleDeletePage` (`/src/features/workspace/Workspace.tsx`) — `remaining[Math.min(index, remaining.length - 1)].id` — is a small UX nicety beyond the plan's literal "Done when" wording (which only asked that deleting removes the page from the grid), added because leaving `selectedPageId` dangling would blank the preview pane. Worth confirming this is the desired behavior (versus, say, clearing selection entirely) since it wasn't explicitly specified.
+- The rotate/delete icon buttons in `PageThumbnail.tsx` are always visible (matching the existing drag-handle's always-visible pattern) rather than hover-gated — a deliberate deviation from a literal reading of the plan's "visible on hover/focus, and always visible on touch devices," chosen for consistency with the existing handle and to avoid an accessibility gap on non-hover-capable pointers generally, not just touch. Worth a design look if a hover-hidden treatment is preferred for a cleaner default grid appearance.
+
+### Future work
+
+Phase 4 (undo/redo) wraps the `pages` slice generically and, per the plan, automatically covers `ROTATE_PAGE`/`DELETE_PAGE` (and `ADD_FILES`) for free via the same wrapped-reducer mechanism — no changes anticipated to this step's code to support it.

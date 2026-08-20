@@ -17,6 +17,8 @@ interface ThumbnailGridProps {
   selectedPageId: string | null
   onSelect: (pageId: string) => void
   onReorder: (fromIndex: number, toIndex: number) => void
+  onRotate: (pageId: string) => void
+  onDelete: (pageId: string) => void
 }
 
 /**
@@ -31,6 +33,8 @@ export function ThumbnailGrid({
   selectedPageId,
   onSelect,
   onReorder,
+  onRotate,
+  onDelete,
 }: ThumbnailGridProps) {
   const docsBySourceFileId = useMemo(
     () => new Map(sourceFiles.map((sourceFile) => [sourceFile.id, sourceFile.doc])),
@@ -68,6 +72,8 @@ export function ThumbnailGrid({
                 doc={doc}
                 isSelected={page.id === selectedPageId}
                 onSelect={onSelect}
+                onRotate={onRotate}
+                onDelete={onDelete}
               />
             )
           })}

@@ -104,12 +104,18 @@ export interface PageRenderHandle {
  * Only one render may run on a given canvas at a time — if a previous
  * render on this canvas is still in flight, `cancel()` it before calling
  * this again.
+ *
+ * `additionalRotation` is added on top of the page's own baked-in rotation
+ * (`page.rotate`), not a replacement for it — this is what lets a page that
+ * already has some rotation in the source file, plus a further rotation
+ * applied in this session, render correctly as their sum.
  */
 export function renderPageToCanvas(
   doc: PDFDocumentProxy,
   pageNumber: number,
   canvas: HTMLCanvasElement,
   scale: number,
+  additionalRotation: 0 | 90 | 180 | 270 = 0,
 ): PageRenderHandle {
   let cancelled = false
   let renderTask: RenderTask | null = null
@@ -118,7 +124,7 @@ export function renderPageToCanvas(
     const page = await doc.getPage(pageNumber)
     if (cancelled) return
 
-    const viewport = page.getViewport({ scale })
+    const viewport = page.getViewport({ scale, rotation: (page.rotate + additionalRotation) % 360 })
     canvas.width = viewport.width
     canvas.height = viewport.height
 

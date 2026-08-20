@@ -83,6 +83,26 @@ function WorkspaceScreen() {
     setUploadError(null)
   }, [dispatch, pages.length, sourceFiles])
 
+  const handleRotatePage = useCallback(
+    (pageId: string) => {
+      dispatch({ type: 'ROTATE_PAGE', pageId, delta: 90 })
+    },
+    [dispatch],
+  )
+
+  const handleDeletePage = useCallback(
+    (pageId: string) => {
+      dispatch({ type: 'DELETE_PAGE', pageId })
+      setSelectedPageId((current) => {
+        if (current !== pageId) return current
+        const index = pages.findIndex((page) => page.id === pageId)
+        const remaining = pages.filter((page) => page.id !== pageId)
+        return remaining.length === 0 ? null : remaining[Math.min(index, remaining.length - 1)].id
+      })
+    },
+    [dispatch, pages],
+  )
+
   const handleDownload = useCallback(async () => {
     setIsExporting(true)
     setDownloadError(null)
@@ -216,6 +236,8 @@ function WorkspaceScreen() {
                 onReorder={(fromIndex, toIndex) =>
                   dispatch({ type: 'REORDER_PAGES', fromIndex, toIndex })
                 }
+                onRotate={handleRotatePage}
+                onDelete={handleDeletePage}
               />
             </div>
             <aside className="w-[26rem] shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-6">

@@ -26,12 +26,12 @@ export function PagePreview({ doc, page, position, totalPages }: PagePreviewProp
 
     setStatus('loading')
     const scale = PREVIEW_SCALE * (window.devicePixelRatio || 1)
-    const handle = renderPageToCanvas(doc, page.sourcePageNumber, canvas, scale)
+    const handle = renderPageToCanvas(doc, page.sourcePageNumber, canvas, scale, page.rotation)
 
     handle.promise.then(() => setStatus('ready')).catch(() => setStatus('error'))
 
     return () => handle.cancel()
-  }, [doc, page.sourcePageNumber])
+  }, [doc, page.sourcePageNumber, page.rotation])
 
   return (
     <div className="flex flex-col gap-3">
