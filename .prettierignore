@@ -1,0 +1,8 @@
+dist
+node_modules
+package-lock.json
+
+# Pre-existing project docs / harness config — not this tool's to reformat
+.claude
+CONSTITUTION.md
+PRD.md
