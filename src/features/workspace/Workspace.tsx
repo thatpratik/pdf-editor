@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { WorkspaceProvider } from './WorkspaceContext'
 import { useWorkspace } from './useWorkspace'
 import { loadSourceFiles } from './loadSourceFiles'
+import { buildPdf, downloadBytes } from '../../lib/pdfExport'
 import { UploadDropzone } from './UploadDropzone'
 import { ThumbnailGrid } from './ThumbnailGrid'
 import { PagePreview } from './PagePreview'
@@ -11,6 +12,7 @@ type UploadStatus = 'idle' | 'loading' | 'error'
 
 const GENERIC_LOAD_ERROR =
   "One of these files couldn't be opened. It may not be a valid PDF, or the file may be corrupted."
+const DOWNLOAD_ERROR = "Couldn't build the PDF. Please try again."
 
 /**
  * The app's current screen: upload one or more PDFs, then browse their
@@ -33,6 +35,8 @@ function WorkspaceScreen() {
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle')
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null)
+  const [isExporting, setIsExporting] = useState(false)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
 
   const addMoreInputRef = useRef<HTMLInputElement>(null)
 
@@ -79,6 +83,19 @@ function WorkspaceScreen() {
     setUploadError(null)
   }, [dispatch, pages.length, sourceFiles])
 
+  const handleDownload = useCallback(async () => {
+    setIsExporting(true)
+    setDownloadError(null)
+    try {
+      const bytes = await buildPdf(sourceFiles, pages)
+      downloadBytes(bytes, 'merged.pdf')
+    } catch {
+      setDownloadError(DOWNLOAD_ERROR)
+    } finally {
+      setIsExporting(false)
+    }
+  }, [sourceFiles, pages])
+
   const docsBySourceFileId = new Map(sourceFiles.map((sourceFile) => [sourceFile.id, sourceFile.doc]))
   const selectedIndex = pages.findIndex((page) => page.id === selectedPageId)
   const selectedPage = selectedIndex === -1 ? null : pages[selectedIndex]
@@ -98,6 +115,14 @@ function WorkspaceScreen() {
         </div>
         {pages.length > 0 && (
           <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={isExporting}
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+            >
+              {isExporting ? 'Building…' : 'Download'}
+            </button>
             <button
               type="button"
               onClick={() => addMoreInputRef.current?.click()}
@@ -139,6 +164,14 @@ function WorkspaceScreen() {
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-red-200 bg-red-50 px-6 py-2 text-sm text-red-700">
           <span>{uploadError}</span>
           <button type="button" onClick={() => setUploadStatus('idle')} className="font-medium hover:underline">
+            Dismiss
+          </button>
+        </div>
+      )}
+      {downloadError && (
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-red-200 bg-red-50 px-6 py-2 text-sm text-red-700">
+          <span>{downloadError}</span>
+          <button type="button" onClick={() => setDownloadError(null)} className="font-medium hover:underline">
             Dismiss
           </button>
         </div>
