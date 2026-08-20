@@ -95,6 +95,8 @@ src/
 
 ## Phase 1 — Multi-file upload + drag-and-drop reorder (in-memory only)
 
+**Status:** ✅ Shipped — see `docs/diary/2026-08-20-workspace-multi-file-and-export.md`, Step 1 (commit `ca57e13`).
+
 **Covers:** story 4 (reorder), and lays the groundwork for story 1 (merge — export comes in Phase 2).
 
 **New dependency:** `@dnd-kit/core@^6`, `@dnd-kit/sortable@^10`, `@dnd-kit/utilities@^3` — pin to this specific, stable generation deliberately. dndkit.com's current landing docs default to a newer, differently-shaped rewrite (`@dnd-kit/react` + `@dnd-kit/dom`, using `DragDropProvider` instead of `DndContext`, no `SortableContext` wrapper, a different sensor-config shape) — don't follow those docs when implementing this phase's API calls below.
@@ -115,6 +117,8 @@ src/
 ---
 
 ## Phase 2 — Export pipeline + non-destructive download
+
+**Status:** ✅ Shipped — see `docs/diary/2026-08-20-workspace-multi-file-and-export.md`, Step 2 (commit `f4685d0`).
 
 **Covers:** story 1 (merge) completed end-to-end; the PRD's "original untouched, download button produces the finished file" decision, for every later phase to reuse.
 
@@ -150,6 +154,8 @@ function downloadBytes(bytes: Uint8Array, filename: string): void
 
 ## Phase 3 — Delete and rotate individual pages
 
+**Status:** ✅ Shipped — see `docs/diary/2026-08-20-workspace-multi-file-and-export.md`, Step 3 (commit `7e030eb`).
+
 **Covers:** story 5 (crop excluded — deferred to v2 per the PRD).
 
 **Steps:**
@@ -164,6 +170,8 @@ function downloadBytes(bytes: Uint8Array, filename: string): void
 ---
 
 ## Phase 4 — Basic undo/redo
+
+**Status:** ✅ Shipped — see `docs/diary/2026-08-20-workspace-multi-file-and-export.md`, Step 4.
 
 **Covers:** story 8. Explicitly basic only, per the PRD ("nothing more than that... later part" for deeper history) — this is a flat past/future stack of full `pages` snapshots, not a command pattern with per-action inverses.
 

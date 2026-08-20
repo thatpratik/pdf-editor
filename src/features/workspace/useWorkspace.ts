@@ -6,6 +6,10 @@ import type { WorkspaceState } from './types'
 export interface WorkspaceContextValue {
   state: WorkspaceState
   dispatch: Dispatch<WorkspaceAction>
+  undo: () => void
+  redo: () => void
+  canUndo: boolean
+  canRedo: boolean
 }
 
 export const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)

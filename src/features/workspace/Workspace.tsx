@@ -29,7 +29,7 @@ export function Workspace() {
 }
 
 function WorkspaceScreen() {
-  const { state, dispatch } = useWorkspace()
+  const { state, dispatch, undo, redo, canUndo, canRedo } = useWorkspace()
   const { sourceFiles, pages } = state
 
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle')
@@ -52,6 +52,25 @@ function WorkspaceScreen() {
       sourceFilesRef.current.forEach((sourceFile) => sourceFile.doc.destroy())
     }
   }, [])
+
+  // Cmd/Ctrl+Z to undo, Cmd/Ctrl+Shift+Z to redo — scoped to this screen for
+  // as long as it's mounted.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isModifierPressed = event.metaKey || event.ctrlKey
+      if (!isModifierPressed || event.key.toLowerCase() !== 'z') return
+
+      event.preventDefault()
+      if (event.shiftKey) {
+        redo()
+      } else {
+        undo()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [undo, redo])
 
   const handleFilesSelected = useCallback(
     (files: File[]) => {
@@ -116,10 +135,14 @@ function WorkspaceScreen() {
     }
   }, [sourceFiles, pages])
 
-  const docsBySourceFileId = new Map(sourceFiles.map((sourceFile) => [sourceFile.id, sourceFile.doc]))
+  const docsBySourceFileId = new Map(
+    sourceFiles.map((sourceFile) => [sourceFile.id, sourceFile.doc]),
+  )
   const selectedIndex = pages.findIndex((page) => page.id === selectedPageId)
   const selectedPage = selectedIndex === -1 ? null : pages[selectedIndex]
-  const selectedDoc = selectedPage ? docsBySourceFileId.get(selectedPage.sourceFileId) ?? null : null
+  const selectedDoc = selectedPage
+    ? (docsBySourceFileId.get(selectedPage.sourceFileId) ?? null)
+    : null
 
   return (
     <div className="flex h-screen flex-col bg-slate-50">
@@ -128,50 +151,76 @@ function WorkspaceScreen() {
           <h1 className="text-lg font-semibold text-slate-900">PDF Editor</h1>
           {pages.length > 0 && (
             <p className="text-xs text-slate-500">
-              {sourceFiles.length} {sourceFiles.length === 1 ? 'file' : 'files'} ·{' '}
-              {pages.length} {pages.length === 1 ? 'page' : 'pages'}
+              {sourceFiles.length} {sourceFiles.length === 1 ? 'file' : 'files'} · {pages.length}{' '}
+              {pages.length === 1 ? 'page' : 'pages'}
             </p>
           )}
         </div>
-        {pages.length > 0 && (
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={handleDownload}
-              disabled={isExporting}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
-            >
-              {isExporting ? 'Building…' : 'Download'}
-            </button>
-            <button
-              type="button"
-              onClick={() => addMoreInputRef.current?.click()}
-              disabled={uploadStatus === 'loading'}
-              className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline"
-            >
-              Add more files
-            </button>
-            <input
-              ref={addMoreInputRef}
-              type="file"
-              accept="application/pdf,.pdf"
-              multiple
-              className="hidden"
-              onChange={(event) => {
-                const files = Array.from(event.target.files ?? [])
-                event.target.value = ''
-                if (files.length > 0) handleFilesSelected(files)
-              }}
-            />
-            <button
-              type="button"
-              onClick={handleClearAll}
-              className="text-sm font-medium text-slate-500 hover:text-slate-700 hover:underline"
-            >
-              Clear all
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-4">
+          {(canUndo || canRedo) && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={undo}
+                disabled={!canUndo}
+                aria-label="Undo"
+                title="Undo (Ctrl/Cmd+Z)"
+                className="rounded px-2 py-1 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+              >
+                Undo
+              </button>
+              <button
+                type="button"
+                onClick={redo}
+                disabled={!canRedo}
+                aria-label="Redo"
+                title="Redo (Ctrl/Cmd+Shift+Z)"
+                className="rounded px-2 py-1 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+              >
+                Redo
+              </button>
+            </div>
+          )}
+          {pages.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={handleDownload}
+                disabled={isExporting}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+              >
+                {isExporting ? 'Building…' : 'Download'}
+              </button>
+              <button
+                type="button"
+                onClick={() => addMoreInputRef.current?.click()}
+                disabled={uploadStatus === 'loading'}
+                className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline"
+              >
+                Add more files
+              </button>
+              <input
+                ref={addMoreInputRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  const files = Array.from(event.target.files ?? [])
+                  event.target.value = ''
+                  if (files.length > 0) handleFilesSelected(files)
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleClearAll}
+                className="text-sm font-medium text-slate-500 hover:text-slate-700 hover:underline"
+              >
+                Clear all
+              </button>
+            </>
+          )}
+        </div>
       </header>
 
       {pages.length > 0 && uploadStatus === 'loading' && (
@@ -183,7 +232,11 @@ function WorkspaceScreen() {
       {pages.length > 0 && uploadStatus === 'error' && uploadError && (
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-red-200 bg-red-50 px-6 py-2 text-sm text-red-700">
           <span>{uploadError}</span>
-          <button type="button" onClick={() => setUploadStatus('idle')} className="font-medium hover:underline">
+          <button
+            type="button"
+            onClick={() => setUploadStatus('idle')}
+            className="font-medium hover:underline"
+          >
             Dismiss
           </button>
         </div>
@@ -191,7 +244,11 @@ function WorkspaceScreen() {
       {downloadError && (
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-red-200 bg-red-50 px-6 py-2 text-sm text-red-700">
           <span>{downloadError}</span>
-          <button type="button" onClick={() => setDownloadError(null)} className="font-medium hover:underline">
+          <button
+            type="button"
+            onClick={() => setDownloadError(null)}
+            className="font-medium hover:underline"
+          >
             Dismiss
           </button>
         </div>
