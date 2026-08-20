@@ -283,3 +283,55 @@ The only real design decision was where to put a second, independently-toggleabl
 ### Future work
 
 Phase 6 (split into zipped files) shares almost all of its mechanics with this step — partition `pages` into groups instead of filtering to one subset, call `buildPdf` once per group (unchanged, same as here), and zip the results — per the plan's own note that "single-page extraction and multi-way split end up sharing nearly all of their machinery." This step's `handleExtractSelected` should be a close template for Phase 6's per-group export loop.
+
+## Step 6: Split into multiple files at page ranges, zipped (Phase 6)
+
+**Author:** main
+
+### Prompt Context
+
+**Verbatim prompt:** Same standing multi-part autonomous instruction as Steps 4 and 5 — continue through `IMPLEMENTATION_PLAN.md`'s phases in order, validating and committing each, without stopping except at genuine blockers or the plan's own explicit Phase 7 check-in requirement.
+**Interpretation:** Continue straight into Phase 6 after Phase 5 was committed (`0b93ad4`), since the plan already orders it next and nothing about it needed a design decision only the user could make.
+**Inferred intent:** Same as Steps 4 and 5 — keep moving through the ordered plan autonomously.
+
+### What I did
+
+- Before touching any code, found something unrelated to this step but worth flagging: `git log` showed a new commit, `d0e4c72` ("Implement feature X to enhance user experience and optimize performance"), sitting on top of Step 5's commit, that deleted `package-lock.json` wholesale (3828 lines). Nothing in this session created that commit — no command run so far touched `package-lock.json` or called `git commit` outside the two explicit commits for Steps 4 and 5. Surfaced this to the user directly rather than silently proceeding, since an unfamiliar commit with a generic placeholder-sounding message landing on `main` from outside the session is exactly the kind of unexplained state worth a second pair of eyes, even though it didn't block this step (installing the new dependency below regenerates the lockfile as a side effect regardless).
+- Ran `npm install client-zip`, which both added the plan's one new Phase 6 dependency (`client-zip@^2.5.0` in `package.json`) and, as a side effect, regenerated the `package-lock.json` that commit `d0e4c72` had deleted.
+- Added `/src/lib/download.ts`: a small `downloadBlob(blob, filename)` helper — the object-URL-create/anchor-click/revoke dance that `downloadBytes` (Step 2) already implemented inline. Refactored `downloadBytes` in `/src/lib/pdfExport.ts` to build its `Blob` and delegate to this new shared helper, rather than duplicating the same download mechanics a second time for the zip case — a small, in-scope cleanup the plan's Phase 6 section implicitly asked for ("reuse a generalized `downloadBytes`-style helper for a Blob").
+- Added `splitIntoRanges(pages, splitAfterPageIds): WorkingPage[][]` to `/src/lib/pdfExport.ts` — a pure function that walks `pages` in order and starts a new group each time it passes a page whose id is in `splitAfterPageIds`, with a split marked after the very last page correctly producing no trailing empty group.
+- Added `/src/lib/zip.ts`: `zipPdfs(parts: { name: string; bytes: Uint8Array }[]): Promise<Blob>`, a thin wrapper over `client-zip`'s `downloadZip(...).blob()` exactly as the plan specifies (store, not compress, since PDF bytes are already binary/incompressible — `client-zip`'s default behavior needed no extra options to get this).
+- Added a third selection mechanism to the thumbnail grid — a per-page "split after this page" toggle — alongside the existing single preview-selection and the Step 5 extraction-checkbox selection, each independent of the others. One deliberate deviation from the plan's literal wording: the plan modeled split points as `Set<number>` of numeric gap-indices, but I modeled them as `Set<string>` of page *ids* (`splitAfterPageIds` in `Workspace.tsx`) instead — the same semantic ("insert a split boundary right after this specific page"), but robust to the array's indices shifting under reorder/delete/undo, which raw numeric gap-indices captured at toggle-time would not be. `splitIntoRanges` only ever needs to check id membership while walking the current `pages` order, so no conversion back to indices was needed anywhere.
+- Placed the toggle in the one remaining free corner of `PageThumbnail`'s card — bottom-right — as a small scissors-icon button that fills solid blue when active (`aria-pressed`), next to the drag handle (top-left), rotate/delete (top-right), and Step 5's extraction checkbox (bottom-left). Threaded `splitAfterPageIds`/`onToggleSplitAfter` through `ThumbnailGrid.tsx` the same way every other per-page action has been threaded since Step 3.
+- Added `handleToggleSplitAfter` and `handleSplit` in `Workspace.tsx`: `handleSplit` calls `splitIntoRanges(pages, splitAfterPageIds)`, runs `buildPdf(sourceFiles, range)` once per resulting group (naming each part `part-1.pdf`, `part-2.pdf`, … predictably as the plan suggests), hands the results to `zipPdfs`, then `downloadBlob(zipBlob, 'split-output.zip')`. A "Split into N files" button appears in the header only once at least one split point is marked (mirroring Step 5's conditional "Extract selected" button), with its own `isSplitting` flag. `handleDeletePage` and `handleClearAll` were both extended to also prune/reset `splitAfterPageIds`, exactly matching the equivalent handling already added for `selectedForExtractIds` in Step 5.
+
+### Why
+
+Reusing `buildPdf` completely unchanged for every one of the split's output parts is exactly the payoff the plan anticipated back in Phase 2 — a single, already-thrice-proven export function, just called once per partition instead of once per whole working set or once per filtered subset (Step 5). Modeling split points by page id rather than raw index was a small, deliberate choice to make the feature correct under the reordering this same app already supports (Phase 1) and the undo/redo this app already supports (Step 4) — a numeric-index model would have silently pointed at the wrong gap the moment a drag-reorder or an undo shifted the array underneath it.
+
+### What worked
+
+- Every validation step (`tsc -b`, `eslint .`, `npm run build`) passed on the first attempt.
+- Playwright verification followed the established pattern, with one new wrinkle handled cleanly: uploaded the same `file-a.pdf` (3 pages)/`file-b.pdf` (2 pages) pair to get a known 5-page grid, marked split points after the 2nd and 4th thumbnails (non-adjacent groupings again, deliberately, same reasoning as Step 5), and confirmed the header button read exactly "Split into 3 files" before ever clicking it — catching a wrong partition count before bothering to download anything. Downloaded the resulting `split-output.zip`, unzipped it with the system `unzip` command, and inspected each of the three `part-N.pdf` files with `strings ... | grep "File"`: `part-1.pdf` held `File A - Page 1` + `File A - Page 2`, `part-2.pdf` held `File A - Page 3` + `File B - Page 1` (correctly spanning the file boundary, matching this app's core "flat pages array" design from Phase 1), and `part-3.pdf` held just `File B - Page 2` — exactly the three groups a split after positions 2 and 4 should produce. Confirmed the main grid still reported "5 pages" immediately afterward, proving split is non-destructive like extraction.
+
+### What didn't work
+
+The only hiccup was in the Playwright test script, not the app: an initial `page.getByRole('button', { name: /Split into/ })` locator matched six elements instead of one — the header's "Split into 3 files" button, plus all five per-thumbnail toggle buttons, since every one of the toggles' `aria-label`/`title` also happens to start with "Split into" ("Split into a new file after this page"). Playwright's strict-mode error usefully printed all six matched elements verbatim, which incidentally *confirmed* the feature was already working correctly (the header button already read "Split into 3 files", and two of the five toggle buttons already showed `aria-pressed="true"` at exactly the indices that had been clicked) before I'd even fixed the test. Tightened the regex to `/Split into \d+ files/` to disambiguate, and the corrected script then ran clean.
+
+### What I learned
+
+A Playwright strict-mode "matched N elements" error is worth reading in full rather than just fixing the locator and moving on — in this case the error dump itself was a legitimate assertion, showing the exact `aria-pressed` states and button text before any code change was needed to fix the test. This is a cheap way to get a "free" verification pass out of what looks at first like pure test breakage.
+
+### What was tricky
+
+Deciding between the plan's literal numeric-gap-index model and a page-id-based one was the only real judgment call this step — nothing else required new design thinking, since extraction (Step 5) had already established the exact shape (a `Set` of transient, non-historied selection state; a conditional header button; a per-thumbnail toggle) that this step just needed a second instance of.
+
+### What warrants review
+
+- The `splitAfterPageIds: Set<string>`-of-ids design (`/src/features/workspace/Workspace.tsx`) is a deliberate deviation from the plan's literal `Set<number>`-of-gap-indices sketch, for the robustness reasons described above. Functionally equivalent and, I'd argue, strictly better under reorder/undo — but worth a look to confirm this reading of "simplest to model as..." (an implementation suggestion, not a strict interface requirement) is the intended latitude.
+- Marking "split after the last page" is currently allowed by the UI (the toggle button on the last thumbnail lights up normally) even though `splitIntoRanges` silently treats it as a no-op (no trailing empty group is produced, so the file count doesn't change). This isn't a bug — the plan doesn't ask for this case to be specially handled — but a user could toggle it and be confused why "Split into N files" doesn't increment. Worth deciding whether the last thumbnail's toggle should just be disabled/hidden instead.
+- The unexpected `package-lock.json`-deleting commit (`d0e4c72`) noted above under "What I did" is unrelated to this step's actual work but is flagged here for the record, since it happened during this step's session and its cause is still unexplained.
+
+### Future work
+
+Per the plan, Phases 7 and 8 (in-place text and image editing) are the two hardest, most open-ended remaining phases, and the plan itself calls for an explicit check-in with the user before Phase 7 begins, given a real product-relevant limitation (occluded original content remains physically present in the output file, not truly deleted). That check-in is happening as the next step, before any Phase 7 code is written, rather than being silently skipped.

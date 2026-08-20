@@ -213,6 +213,8 @@ function downloadBytes(bytes: Uint8Array, filename: string): void
 
 ## Phase 6 — Split into multiple files at page ranges (zipped)
 
+**Status:** ✅ Shipped — see `docs/diary/2026-08-20-workspace-multi-file-and-export.md`, Step 6.
+
 **Covers:** story 3, including the "delivered as one zip download" decision.
 
 **New dependency:** `client-zip`.

@@ -15,6 +15,8 @@ interface ThumbnailGridProps {
   onDelete: (pageId: string) => void
   selectedForExtractIds: Set<string>
   onToggleExtract: (pageId: string) => void
+  splitAfterPageIds: Set<string>
+  onToggleSplitAfter: (pageId: string) => void
 }
 
 /**
@@ -33,6 +35,8 @@ export function ThumbnailGrid({
   onDelete,
   selectedForExtractIds,
   onToggleExtract,
+  splitAfterPageIds,
+  onToggleSplitAfter,
 }: ThumbnailGridProps) {
   const docsBySourceFileId = useMemo(
     () => new Map(sourceFiles.map((sourceFile) => [sourceFile.id, sourceFile.doc])),
@@ -72,6 +76,8 @@ export function ThumbnailGrid({
                 onDelete={onDelete}
                 isSelectedForExtract={selectedForExtractIds.has(page.id)}
                 onToggleExtract={onToggleExtract}
+                isSplitAfter={splitAfterPageIds.has(page.id)}
+                onToggleSplitAfter={onToggleSplitAfter}
               />
             )
           })}

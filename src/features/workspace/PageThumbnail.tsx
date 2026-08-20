@@ -18,6 +18,8 @@ interface PageThumbnailProps {
   onDelete: (pageId: string) => void
   isSelectedForExtract: boolean
   onToggleExtract: (pageId: string) => void
+  isSplitAfter: boolean
+  onToggleSplitAfter: (pageId: string) => void
 }
 
 /**
@@ -34,6 +36,8 @@ export function PageThumbnail({
   onDelete,
   isSelectedForExtract,
   onToggleExtract,
+  isSplitAfter,
+  onToggleSplitAfter,
 }: PageThumbnailProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -136,6 +140,32 @@ export function PageThumbnail({
           className="h-4 w-4 accent-blue-600"
         />
       </label>
+
+      <button
+        type="button"
+        onClick={() => onToggleSplitAfter(page.id)}
+        aria-pressed={isSplitAfter}
+        aria-label="Split into a new file after this page"
+        title="Split into a new file after this page"
+        className={`absolute right-1.5 bottom-1.5 z-10 flex h-6 w-6 items-center justify-center rounded ${
+          isSplitAfter
+            ? 'bg-blue-600 text-white hover:bg-blue-700'
+            : 'bg-white/80 text-slate-400 hover:bg-white hover:text-slate-600'
+        }`}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          className="h-4 w-4"
+          aria-hidden="true"
+        >
+          <circle cx="6" cy="6" r="2" />
+          <circle cx="6" cy="18" r="2" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 7.5 20 20M7.5 16.5 20 4" />
+        </svg>
+      </button>
 
       <button
         type="button"

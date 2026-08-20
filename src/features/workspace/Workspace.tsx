@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { WorkspaceProvider } from './WorkspaceContext'
 import { useWorkspace } from './useWorkspace'
 import { loadSourceFiles } from './loadSourceFiles'
-import { buildPdf, downloadBytes } from '../../lib/pdfExport'
+import { buildPdf, downloadBytes, splitIntoRanges } from '../../lib/pdfExport'
+import { zipPdfs } from '../../lib/zip'
+import { downloadBlob } from '../../lib/download'
 import { UploadDropzone } from './UploadDropzone'
 import { ThumbnailGrid } from './ThumbnailGrid'
 import { PagePreview } from './PagePreview'
@@ -41,6 +43,10 @@ function WorkspaceScreen() {
   // WorkspaceState/history: it isn't something a user needs to undo.
   const [selectedForExtractIds, setSelectedForExtractIds] = useState<Set<string>>(new Set())
   const [isExtracting, setIsExtracting] = useState(false)
+  // Pages after which a split boundary is marked — same "transient UI state,
+  // not history" reasoning as selectedForExtractIds above.
+  const [splitAfterPageIds, setSplitAfterPageIds] = useState<Set<string>>(new Set())
+  const [isSplitting, setIsSplitting] = useState(false)
 
   const addMoreInputRef = useRef<HTMLInputElement>(null)
 
@@ -103,6 +109,7 @@ function WorkspaceScreen() {
     dispatch({ type: 'RESET' })
     setSelectedPageId(null)
     setSelectedForExtractIds(new Set())
+    setSplitAfterPageIds(new Set())
     setUploadStatus('idle')
     setUploadError(null)
   }, [dispatch, pages.length, sourceFiles])
@@ -124,6 +131,12 @@ function WorkspaceScreen() {
         return remaining.length === 0 ? null : remaining[Math.min(index, remaining.length - 1)].id
       })
       setSelectedForExtractIds((current) => {
+        if (!current.has(pageId)) return current
+        const next = new Set(current)
+        next.delete(pageId)
+        return next
+      })
+      setSplitAfterPageIds((current) => {
         if (!current.has(pageId)) return current
         const next = new Set(current)
         next.delete(pageId)
@@ -158,6 +171,38 @@ function WorkspaceScreen() {
       setIsExtracting(false)
     }
   }, [sourceFiles, pages, selectedForExtractIds])
+
+  const handleToggleSplitAfter = useCallback((pageId: string) => {
+    setSplitAfterPageIds((current) => {
+      const next = new Set(current)
+      if (next.has(pageId)) {
+        next.delete(pageId)
+      } else {
+        next.add(pageId)
+      }
+      return next
+    })
+  }, [])
+
+  const handleSplit = useCallback(async () => {
+    setIsSplitting(true)
+    setDownloadError(null)
+    try {
+      const ranges = splitIntoRanges(pages, splitAfterPageIds)
+      const parts = await Promise.all(
+        ranges.map(async (range, index) => ({
+          name: `part-${index + 1}.pdf`,
+          bytes: await buildPdf(sourceFiles, range),
+        })),
+      )
+      const zipBlob = await zipPdfs(parts)
+      downloadBlob(zipBlob, 'split-output.zip')
+    } catch {
+      setDownloadError(DOWNLOAD_ERROR)
+    } finally {
+      setIsSplitting(false)
+    }
+  }, [sourceFiles, pages, splitAfterPageIds])
 
   const handleDownload = useCallback(async () => {
     setIsExporting(true)
@@ -238,6 +283,16 @@ function WorkspaceScreen() {
                   {isExtracting
                     ? 'Extracting…'
                     : `Extract selected (${selectedForExtractIds.size})`}
+                </button>
+              )}
+              {splitAfterPageIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={handleSplit}
+                  disabled={isSplitting}
+                  className="rounded-md border border-blue-600 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-blue-300 disabled:text-blue-300 disabled:hover:bg-transparent"
+                >
+                  {isSplitting ? 'Splitting…' : `Split into ${splitAfterPageIds.size + 1} files`}
                 </button>
               )}
               <button
@@ -346,6 +401,8 @@ function WorkspaceScreen() {
                 onDelete={handleDeletePage}
                 selectedForExtractIds={selectedForExtractIds}
                 onToggleExtract={handleToggleExtract}
+                splitAfterPageIds={splitAfterPageIds}
+                onToggleSplitAfter={handleToggleSplitAfter}
               />
             </div>
             <aside className="w-[26rem] shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-6">

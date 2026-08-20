@@ -1,5 +1,6 @@
 import { PDFDocument, degrees } from '@pdfme/pdf-lib'
 import type { SourceFile, WorkingPage } from '../features/workspace/types'
+import { downloadBlob } from './download'
 
 /**
  * A `SourceFile`'s raw bytes, read lazily via `File.arrayBuffer()` and kept
@@ -24,7 +25,10 @@ function getRawBytes(sourceFile: SourceFile): Promise<ArrayBuffer> {
  * this repeatedly (download, extract, split) at any point in a session
  * reflects the current state exactly, with no separate save step.
  */
-export async function buildPdf(sourceFiles: SourceFile[], pages: WorkingPage[]): Promise<Uint8Array> {
+export async function buildPdf(
+  sourceFiles: SourceFile[],
+  pages: WorkingPage[],
+): Promise<Uint8Array> {
   const outputDoc = await PDFDocument.create()
   const sourceFilesById = new Map(sourceFiles.map((sourceFile) => [sourceFile.id, sourceFile]))
   // Scoped to this call only — a fresh pdf-lib parse per buildPdf, reusing
@@ -55,13 +59,30 @@ export async function buildPdf(sourceFiles: SourceFile[], pages: WorkingPage[]):
 
 /** Triggers a browser download of already-built PDF bytes. */
 export function downloadBytes(bytes: Uint8Array, filename: string): void {
-  const blob = new Blob([new Uint8Array(bytes)], { type: 'application/pdf' })
-  const url = URL.createObjectURL(blob)
+  downloadBlob(new Blob([new Uint8Array(bytes)], { type: 'application/pdf' }), filename)
+}
 
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
+/**
+ * Partitions `pages` into contiguous groups at the given split points — a
+ * split lands right after the page whose id is in `splitAfterPageIds`. Pure
+ * slicing only: no page-order or content changes. A split marked after the
+ * very last page produces no trailing empty group.
+ */
+export function splitIntoRanges(
+  pages: WorkingPage[],
+  splitAfterPageIds: Set<string>,
+): WorkingPage[][] {
+  const ranges: WorkingPage[][] = []
+  let current: WorkingPage[] = []
 
-  setTimeout(() => URL.revokeObjectURL(url), 0)
+  for (const page of pages) {
+    current.push(page)
+    if (splitAfterPageIds.has(page.id)) {
+      ranges.push(current)
+      current = []
+    }
+  }
+  if (current.length > 0) ranges.push(current)
+
+  return ranges
 }
