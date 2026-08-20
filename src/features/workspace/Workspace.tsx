@@ -47,6 +47,9 @@ function WorkspaceScreen() {
   // not history" reasoning as selectedForExtractIds above.
   const [splitAfterPageIds, setSplitAfterPageIds] = useState<Set<string>>(new Set())
   const [isSplitting, setIsSplitting] = useState(false)
+  // Whether the once-per-session text-edit disclosure (edited/covered text
+  // isn't truly removed from the file) has been shown yet.
+  const [hasSeenTextEditCaveat, setHasSeenTextEditCaveat] = useState(false)
 
   const addMoreInputRef = useRef<HTMLInputElement>(null)
 
@@ -412,6 +415,11 @@ function WorkspaceScreen() {
                   page={selectedPage}
                   position={selectedIndex + 1}
                   totalPages={pages.length}
+                  onApplyTextEdit={(edit) =>
+                    dispatch({ type: 'APPLY_TEXT_EDIT', pageId: selectedPage.id, edit })
+                  }
+                  hasSeenTextEditCaveat={hasSeenTextEditCaveat}
+                  onDismissTextEditCaveat={() => setHasSeenTextEditCaveat(true)}
                 />
               )}
             </aside>

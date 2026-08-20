@@ -241,6 +241,8 @@ Implemented via `client-zip`'s `downloadZip(parts.map(p => ({ name: p.name, inpu
 
 ## Phase 7 — In-place text editing with local-block reflow
 
+**Status:** ✅ Shipped — see `docs/diary/2026-08-20-workspace-multi-file-and-export.md`, Step 7. User confirmed the occlusion caveat below and chose to surface it in-app (a dismissible disclosure shown when text-edit mode is entered).
+
 **Covers:** story 6. This is the hardest, least mechanical phase — per `CONSTITUTION.md`, no off-the-shelf library does true in-place PDF text editing, so this phase implements the overlay/occlusion approach the constitution already commits to, and its design should be treated as a first attempt to validate, not a fixed spec.
 
 **Important caveat to confirm with the user before or during this phase, not after:** neither pdf-lib nor any other client-side library can truly delete or rewrite existing text operators in a PDF's content stream. The only pdf-lib-native way to "remove" the original text is to draw an opaque rectangle over it and draw new text on top — the original glyphs remain physically present in the file underneath that rectangle (recoverable by anyone who inspects the raw content stream or copy-pastes with certain tools, even though nothing is visible on screen). This is a real, product-relevant limitation for an "editor" and should be surfaced explicitly rather than discovered later — worth a short check-in with the user once this phase starts, not something to silently ship.

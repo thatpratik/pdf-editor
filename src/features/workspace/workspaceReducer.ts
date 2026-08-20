@@ -1,4 +1,6 @@
-import type { SourceFile, WorkingPage, WorkspaceState } from './types'
+import type { PageEdit, SourceFile, WorkingPage, WorkspaceState } from './types'
+
+type TextEdit = Extract<PageEdit, { type: 'text' }>
 
 /**
  * The dispatch-facing action type consumed by the rest of the app (via
@@ -10,6 +12,7 @@ export type WorkspaceAction =
   | { type: 'REORDER_PAGES'; fromIndex: number; toIndex: number }
   | { type: 'DELETE_PAGE'; pageId: string }
   | { type: 'ROTATE_PAGE'; pageId: string; delta: 90 | -90 }
+  | { type: 'APPLY_TEXT_EDIT'; pageId: string; edit: TextEdit }
   | { type: 'RESET' }
 
 export const initialWorkspaceState: WorkspaceState = {
@@ -30,6 +33,7 @@ export type PagesAction =
   | { type: 'REORDER_PAGES'; fromIndex: number; toIndex: number }
   | { type: 'DELETE_PAGE'; pageId: string }
   | { type: 'ROTATE_PAGE'; pageId: string; delta: 90 | -90 }
+  | { type: 'APPLY_TEXT_EDIT'; pageId: string; edit: TextEdit }
 
 function moveItem<T>(items: T[], fromIndex: number, toIndex: number): T[] {
   const next = items.slice()
@@ -49,8 +53,15 @@ export function pagesReducer(pages: WorkingPage[], action: PagesAction): Working
     case 'ROTATE_PAGE':
       return pages.map((page) =>
         page.id === action.pageId
-          ? { ...page, rotation: (((page.rotation + action.delta + 360) % 360) as 0 | 90 | 180 | 270) }
+          ? {
+              ...page,
+              rotation: ((page.rotation + action.delta + 360) % 360) as 0 | 90 | 180 | 270,
+            }
           : page,
+      )
+    case 'APPLY_TEXT_EDIT':
+      return pages.map((page) =>
+        page.id === action.pageId ? { ...page, edits: [...page.edits, action.edit] } : page,
       )
     default:
       return pages

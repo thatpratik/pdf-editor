@@ -19,7 +19,7 @@
  */
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.mjs?url'
-import type { PDFDocumentProxy as PDFJSDocumentProxy, RenderTask } from 'pdfjs-dist'
+import type { PageViewport, PDFDocumentProxy as PDFJSDocumentProxy, RenderTask } from 'pdfjs-dist'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerSrc
 
@@ -110,6 +110,24 @@ export interface PageRenderHandle {
  * already has some rotation in the source file, plus a further rotation
  * applied in this session, render correctly as their sum.
  */
+/**
+ * Resolves the viewport a page would render at for the given scale and
+ * additional rotation — the same computation `renderPageToCanvas` uses
+ * internally. Exposed separately so callers that need to convert PDF-space
+ * coordinates into on-screen pixels (e.g. positioning a text-edit overlay
+ * atop the rendered canvas) use the exact same transform the canvas itself
+ * was drawn with, rather than re-deriving it.
+ */
+export async function getPageViewport(
+  doc: PDFDocumentProxy,
+  pageNumber: number,
+  scale: number,
+  additionalRotation: 0 | 90 | 180 | 270 = 0,
+): Promise<PageViewport> {
+  const page = await doc.getPage(pageNumber)
+  return page.getViewport({ scale, rotation: (page.rotate + additionalRotation) % 360 })
+}
+
 export function renderPageToCanvas(
   doc: PDFDocumentProxy,
   pageNumber: number,
