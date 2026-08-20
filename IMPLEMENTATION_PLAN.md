@@ -197,6 +197,8 @@ function downloadBytes(bytes: Uint8Array, filename: string): void
 
 ## Phase 5 — Extract one or more pages into their own PDF
 
+**Status:** ✅ Shipped — see `docs/diary/2026-08-20-workspace-multi-file-and-export.md`, Step 5.
+
 **Covers:** story 2.
 
 **Steps:**

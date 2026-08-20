@@ -1,11 +1,5 @@
 import { useMemo } from 'react'
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core'
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable'
 import type { SourceFile, WorkingPage } from './types'
@@ -19,6 +13,8 @@ interface ThumbnailGridProps {
   onReorder: (fromIndex: number, toIndex: number) => void
   onRotate: (pageId: string) => void
   onDelete: (pageId: string) => void
+  selectedForExtractIds: Set<string>
+  onToggleExtract: (pageId: string) => void
 }
 
 /**
@@ -35,6 +31,8 @@ export function ThumbnailGrid({
   onReorder,
   onRotate,
   onDelete,
+  selectedForExtractIds,
+  onToggleExtract,
 }: ThumbnailGridProps) {
   const docsBySourceFileId = useMemo(
     () => new Map(sourceFiles.map((sourceFile) => [sourceFile.id, sourceFile.doc])),
@@ -43,9 +41,7 @@ export function ThumbnailGrid({
 
   // A small drag-activation distance lets a plain click still select the
   // thumbnail instead of every click being interpreted as a drag start.
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-  )
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
@@ -74,6 +70,8 @@ export function ThumbnailGrid({
                 onSelect={onSelect}
                 onRotate={onRotate}
                 onDelete={onDelete}
+                isSelectedForExtract={selectedForExtractIds.has(page.id)}
+                onToggleExtract={onToggleExtract}
               />
             )
           })}

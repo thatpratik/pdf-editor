@@ -235,3 +235,51 @@ Splitting `WorkspaceState` into an un-historied `sourceFiles` piece and a histor
 ### Future work
 
 Phase 5 (extract selected pages) and Phase 6 (split into zipped files) are both meant to reuse `buildPdf` unchanged against a filtered/partitioned subset of `pages`, independent of this step's history mechanism — no interaction expected between undo/redo and either. Phase 7/8's text/image edit actions are meant to become undoable "for free" through this same wrapped reducer once they exist, per the plan; nothing in this step's design should need to change for that.
+
+## Step 5: Extract selected pages into a new PDF (Phase 5)
+
+**Author:** main
+
+### Prompt Context
+
+**Verbatim prompt:** Same multi-part autonomous instruction as Step 4 (see above) — work through `IMPLEMENTATION_PLAN.md`'s remaining phases in order, validating and committing each before moving to the next, without stopping for confirmation except at genuine blockers or the plan's own explicit Phase 7 check-in requirement.
+**Interpretation:** Continue the loop straight into Phase 5 immediately after Phase 4 was committed (`6e5352b`), since the plan already specifies it as next and nothing about it is ambiguous or requires user input.
+**Inferred intent:** Same as Step 4 — keep moving through the ordered plan autonomously, treating `IMPLEMENTATION_PLAN.md` itself as the standing authorization for "what's next" rather than needing a fresh check-in per phase.
+
+### What I did
+
+- Added a second, independent notion of "selected" to the thumbnail grid — extraction-selection via checkbox — distinct from the pre-existing single `selectedPageId` used for the side-panel preview. Deliberately kept it as local UI state in `Workspace.tsx` (`selectedForExtractIds: Set<string>`), per the plan's explicit call-out that this is "transient UI state, not part of `WorkspaceState`/history" — so it doesn't go through `useHistoryReducer` at all and isn't touched by undo/redo.
+- Added a checkbox to each `PageThumbnail` (`/src/features/workspace/PageThumbnail.tsx`), positioned bottom-left of the thumbnail card as its own `<label>`/`<input type="checkbox">` pair, sibling to (not nested inside) the existing click-to-preview `<button>` — deliberately avoiding nesting an `<input>` inside a `<button>`, which is invalid HTML and would need an explicit `stopPropagation()` workaround to stop the preview-select handler from also firing on every checkbox click. Threaded `isSelectedForExtract`/`onToggleExtract` props through `/src/features/workspace/ThumbnailGrid.tsx` the same way `onRotate`/`onDelete` were threaded in Step 3.
+- Added `handleToggleExtract` (flips one page's id in the `Set`) and `handleExtractSelected` (filters `pages` down to the checked ids — in current grid order, since it's a straight `.filter()` over the already-ordered array — calls the unmodified `buildPdf` from Step 2, then `downloadBytes(bytes, 'extracted.pdf')`) in `Workspace.tsx`. A new "Extract selected (N)" button appears in the header only once `selectedForExtractIds.size > 0`, next to the existing Download button, with its own `isExtracting` loading flag so extracting and downloading-the-full-merge don't visually block each other if triggered close together.
+- Made `handleDeletePage` also prune a deleted page's id out of `selectedForExtractIds` (mirroring the existing selected-preview-page reselection logic added in Step 3) and made `handleClearAll` reset the extraction selection alongside everything else it already resets — both are small correctness additions so the displayed "(N)" count can't silently drift from reality after a delete or a full reset.
+- Made no changes at all to `buildPdf`/`downloadBytes` in `/src/lib/pdfExport.ts` — extraction is exactly "Phase 2's export pipeline, called with a filtered subset," precisely as the plan specified.
+
+### Why
+
+Keeping extraction-selection out of `WorkspaceState` (and thus out of history) matches the plan's reasoning directly: which pages are checked for extraction is a transient authoring intent, not project state a user would expect Ctrl+Z to restore. Reusing `buildPdf` unchanged, rather than writing an extraction-specific export path, is what the plan's Phase 2 design was for — the "one export function called with a different pages array" pattern paid off exactly as anticipated.
+
+### What worked
+
+- Every check (`tsc -b`, `eslint .`, `npm run build`) passed on the first attempt — this was the second phase in a row (after Phase 3) where the reusable pieces from earlier phases (the reducer/history split, `buildPdf`) meant the new phase was close to pure UI wiring.
+- Playwright verification followed the by-now-established pattern: uploaded `file-a.pdf` (3 pages) and `file-b.pdf` (2 pages) to get a known 5-page grid in order A1, A2, A3, B1, B2; confirmed the "Extract selected" button is entirely absent (not just disabled) until at least one checkbox is checked; checked the 2nd and 4th checkboxes (A2 and B1 — deliberately non-adjacent, to prove the extraction isn't accidentally only working for contiguous ranges); clicked "Extract selected (2)"; and inspected the downloaded file with the same `@pdfme/pdf-lib` Node script from Step 3. It reported exactly 2 pages, and `strings extracted-check.pdf | grep "File"` showed `File A - Page 2` followed by `File B - Page 1` — the correct pages, in the correct relative order, from across both source files. Confirmed the main grid still reported "5 pages" immediately after extracting, proving the operation is non-destructive as the plan requires ("Extracting does not remove the pages from the working set").
+
+### What didn't work
+
+Nothing failed this step — no incorrect intermediate attempt, no test hang, no typecheck/lint error. This is the first phase since bootstrap where the implementation went right on the first pass, most likely because the underlying export mechanism was already proven correct across two prior phases (initial merge in Step 2, then again after rotate/delete in Step 3) before this step ever filtered its input.
+
+### What I learned
+
+Deliberately choosing non-adjacent pages for the extraction test (rather than, say, the first two pages) was worth the small extra care — a bug that only breaks non-contiguous selection (e.g., something that accidentally sorted or grouped by source file instead of preserving grid order) wouldn't have been caught by testing a contiguous range, and the plan's own "Done when" wording (pages 2 and 4 of 5) already implied this was the right test shape to reach for.
+
+### What was tricky
+
+The only real design decision was where to put a second, independently-toggleable selection affordance without it visually competing with the drag handle (top-left), rotate/delete (top-right), and the click-to-preview button that wraps the whole canvas — resolved by using the one remaining corner (bottom-left) and keeping the checkbox a sibling rather than a descendant of the preview button, which sidestepped the invalid-nested-interactive-elements problem before it became a bug rather than fixing it after the fact.
+
+### What warrants review
+
+- The checkbox's placement (bottom-left, `/src/features/workspace/PageThumbnail.tsx`) slightly overlaps the bottom edge of the thumbnail canvas rather than sitting in genuinely empty space — worth a visual check on a real (non-synthetic) document with busy page content near its bottom-left corner, to confirm the semi-transparent white background (`bg-white/80`) is legible against varied page content.
+- `isExtracting` and `isExporting` are two separate booleans guarding two separate buttons (Extract vs. Download) rather than one shared "an export is in flight" flag — this was a deliberate choice so triggering one doesn't visually disable the other, but it does mean a user could in principle click both Download and Extract at nearly the same moment and have two concurrent `buildPdf` calls in flight. Both calls are independent and read-only over `sourceFiles`/`pages`, so this isn't a correctness bug, just worth knowing it's possible.
+
+### Future work
+
+Phase 6 (split into zipped files) shares almost all of its mechanics with this step — partition `pages` into groups instead of filtering to one subset, call `buildPdf` once per group (unchanged, same as here), and zip the results — per the plan's own note that "single-page extraction and multi-way split end up sharing nearly all of their machinery." This step's `handleExtractSelected` should be a close template for Phase 6's per-group export loop.

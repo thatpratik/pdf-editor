@@ -16,14 +16,25 @@ interface PageThumbnailProps {
   onSelect: (pageId: string) => void
   onRotate: (pageId: string) => void
   onDelete: (pageId: string) => void
+  isSelectedForExtract: boolean
+  onToggleExtract: (pageId: string) => void
 }
 
 /**
  * One canvas-rendered thumbnail in the page grid, labeled with its page
  * number, draggable (via the handle) to reorder the working set, and
- * carrying its own rotate/delete actions.
+ * carrying its own rotate/delete actions plus an extraction checkbox.
  */
-export function PageThumbnail({ page, doc, isSelected, onSelect, onRotate, onDelete }: PageThumbnailProps) {
+export function PageThumbnail({
+  page,
+  doc,
+  isSelected,
+  onSelect,
+  onRotate,
+  onDelete,
+  isSelectedForExtract,
+  onToggleExtract,
+}: PageThumbnailProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
 
@@ -59,7 +70,7 @@ export function PageThumbnail({ page, doc, isSelected, onSelect, onRotate, onDel
         {...attributes}
         {...listeners}
         aria-label="Drag to reorder"
-        className="absolute left-1.5 top-1.5 z-10 flex h-6 w-6 cursor-grab items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+        className="absolute top-1.5 left-1.5 z-10 flex h-6 w-6 cursor-grab items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
       >
         <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4" aria-hidden="true">
           <circle cx="9" cy="6" r="1.4" />
@@ -71,14 +82,21 @@ export function PageThumbnail({ page, doc, isSelected, onSelect, onRotate, onDel
         </svg>
       </button>
 
-      <div className="absolute right-1.5 top-1.5 z-10 flex gap-1">
+      <div className="absolute top-1.5 right-1.5 z-10 flex gap-1">
         <button
           type="button"
           onClick={() => onRotate(page.id)}
           aria-label="Rotate page 90°"
           className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            className="h-4 w-4"
+            aria-hidden="true"
+          >
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -92,7 +110,14 @@ export function PageThumbnail({ page, doc, isSelected, onSelect, onRotate, onDel
           aria-label="Delete page"
           className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            className="h-4 w-4"
+            aria-hidden="true"
+          >
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -101,6 +126,16 @@ export function PageThumbnail({ page, doc, isSelected, onSelect, onRotate, onDel
           </svg>
         </button>
       </div>
+
+      <label className="absolute bottom-1.5 left-1.5 z-10 flex h-6 w-6 items-center justify-center rounded bg-white/80 hover:bg-white">
+        <input
+          type="checkbox"
+          checked={isSelectedForExtract}
+          onChange={() => onToggleExtract(page.id)}
+          aria-label="Select page for extraction"
+          className="h-4 w-4 accent-blue-600"
+        />
+      </label>
 
       <button
         type="button"
