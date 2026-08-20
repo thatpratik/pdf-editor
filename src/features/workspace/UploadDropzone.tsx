@@ -2,14 +2,14 @@ import { useRef, useState } from 'react'
 import type { DragEvent, KeyboardEvent } from 'react'
 
 interface UploadDropzoneProps {
-  onFileSelected: (file: File) => void
+  onFilesSelected: (files: File[]) => void
 }
 
 /**
  * The empty/prompt state shown before any file is loaded: a click-to-browse
- * and drag-and-drop target for picking a single PDF from disk.
+ * and drag-and-drop target for picking one or more PDFs from disk.
  */
-export function UploadDropzone({ onFileSelected }: UploadDropzoneProps) {
+export function UploadDropzone({ onFilesSelected }: UploadDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [isDragActive, setIsDragActive] = useState(false)
 
@@ -18,8 +18,8 @@ export function UploadDropzone({ onFileSelected }: UploadDropzoneProps) {
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     setIsDragActive(false)
-    const file = event.dataTransfer.files[0]
-    if (file) onFileSelected(file)
+    const files = Array.from(event.dataTransfer.files)
+    if (files.length > 0) onFilesSelected(files)
   }
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -63,20 +63,21 @@ export function UploadDropzone({ onFileSelected }: UploadDropzoneProps) {
           />
         </svg>
         <p className="text-base font-medium text-slate-700">
-          Drop a PDF here, or click to choose a file
+          Drop one or more PDFs here, or click to choose files
         </p>
         <p className="text-sm text-slate-400">
-          Your file stays in this browser — nothing is uploaded.
+          Your files stay in this browser — nothing is uploaded.
         </p>
         <input
           ref={inputRef}
           type="file"
           accept="application/pdf,.pdf"
+          multiple
           className="hidden"
           onChange={(event) => {
-            const file = event.target.files?.[0]
+            const files = Array.from(event.target.files ?? [])
             event.target.value = ''
-            if (file) onFileSelected(file)
+            if (files.length > 0) onFilesSelected(files)
           }}
         />
       </div>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PDFDocumentProxy } from '../../lib/pdf'
 import { renderPageToCanvas } from '../../lib/pdf'
+import type { WorkingPage } from './types'
 import { Spinner } from './Spinner'
 
 /** Scale (before device-pixel-ratio) used for the larger single-page preview. */
@@ -8,12 +9,14 @@ const PREVIEW_SCALE = 1.4
 
 interface PagePreviewProps {
   doc: PDFDocumentProxy
-  pageNumber: number
-  pageCount: number
+  page: WorkingPage
+  /** 1-based position of this page within the current working set. */
+  position: number
+  totalPages: number
 }
 
-/** Larger canvas render of one selected page, shown in the side panel. */
-export function PagePreview({ doc, pageNumber, pageCount }: PagePreviewProps) {
+/** Larger canvas render of the selected working page, shown in the side panel. */
+export function PagePreview({ doc, page, position, totalPages }: PagePreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
 
@@ -23,17 +26,17 @@ export function PagePreview({ doc, pageNumber, pageCount }: PagePreviewProps) {
 
     setStatus('loading')
     const scale = PREVIEW_SCALE * (window.devicePixelRatio || 1)
-    const handle = renderPageToCanvas(doc, pageNumber, canvas, scale)
+    const handle = renderPageToCanvas(doc, page.sourcePageNumber, canvas, scale)
 
     handle.promise.then(() => setStatus('ready')).catch(() => setStatus('error'))
 
     return () => handle.cancel()
-  }, [doc, pageNumber])
+  }, [doc, page.sourcePageNumber])
 
   return (
     <div className="flex flex-col gap-3">
       <h2 className="text-sm font-medium text-slate-700">
-        Page {pageNumber} of {pageCount}
+        Page {position} of {totalPages}
       </h2>
       <div className="relative flex min-h-96 items-center justify-center rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
         <canvas ref={canvasRef} className="max-h-[75vh] max-w-full rounded object-contain" />

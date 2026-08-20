@@ -1,7 +1,7 @@
-import { PdfViewer } from './features/viewer/PdfViewer'
+import { Workspace } from './features/workspace/Workspace'
 
 function App() {
-  return <PdfViewer />
+  return <Workspace />
 }
 
 export default App
