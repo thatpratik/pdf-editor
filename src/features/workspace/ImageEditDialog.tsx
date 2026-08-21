@@ -8,6 +8,7 @@ import type { Box } from './ImageRegionOverlay'
 import type { PageEdit, PdfRect, WorkingPage } from './types'
 import { Spinner } from './Spinner'
 import { ImageRegionOverlay } from './ImageRegionOverlay'
+import { CornerMarks } from './CornerMarks'
 
 /**
  * Backing-store render scale (before device-pixel-ratio) for the canvas
@@ -142,7 +143,7 @@ export function ImageEditDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-6"
       onClick={handleClose}
     >
       <div
@@ -150,20 +151,20 @@ export function ImageEditDialog({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium text-slate-700">
+          <h2 className="font-mono text-sm font-medium text-ink/70">
             Editing images — page {position} of {totalPages}
           </h2>
           <button
             type="button"
             onClick={handleClose}
-            className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
+            className="rounded-md bg-teal px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal"
           >
             Done editing
           </button>
         </div>
 
         {!hasSeenEditCaveat && (
-          <div className="flex items-start justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <div className="flex items-start justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
             <span>
               Edited or covered content isn&apos;t fully removed from the file — it&apos;s
               visually replaced, but the original content can still be recovered by inspecting
@@ -179,12 +180,13 @@ export function ImageEditDialog({
           </div>
         )}
 
-        <div className="relative flex flex-1 items-center justify-center overflow-auto rounded-lg border border-slate-200 bg-slate-100 p-4">
+        <div className="relative flex flex-1 items-center justify-center overflow-auto rounded-lg border border-ink/10 bg-ink/5 p-4">
           <div className="relative inline-block">
             <canvas
               ref={canvasRef}
               className="max-w-[88vw] rounded bg-white object-contain shadow"
             />
+            {status === 'ready' && <CornerMarks className="border-teal/70" />}
             {viewport && imageRegions && (
               <ImageRegionOverlay
                 regions={imageRegions}
@@ -200,7 +202,7 @@ export function ImageEditDialog({
             </div>
           )}
           {status === 'error' && (
-            <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-white/90 px-6 text-center text-sm text-red-500">
+            <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-white/90 px-6 text-center text-sm text-danger">
               Couldn&apos;t render this page.
             </div>
           )}

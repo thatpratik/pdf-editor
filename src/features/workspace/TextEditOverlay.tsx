@@ -86,8 +86,8 @@ export function TextEditOverlay({
             }}
             className={`pointer-events-auto absolute px-0.5 whitespace-pre-wrap outline-none ${
               isFocused
-                ? 'overflow-visible border border-dashed border-blue-600 bg-white text-slate-900 shadow-lg'
-                : 'overflow-hidden border border-transparent text-transparent hover:border-dashed hover:border-blue-300 hover:bg-blue-50/30'
+                ? 'overflow-visible border border-dashed border-accent bg-white text-ink shadow-lg'
+                : 'overflow-hidden border border-transparent text-transparent hover:border-dashed hover:border-accent/40 hover:bg-accent/5'
             }`}
           >
             {block.text}

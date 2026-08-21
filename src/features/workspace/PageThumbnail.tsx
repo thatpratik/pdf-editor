@@ -65,8 +65,8 @@ export function PageThumbnail({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={`relative flex flex-col items-center gap-1.5 rounded-lg border p-2 transition ${
         isSelected
-          ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
-          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+          ? 'border-accent bg-accent/6'
+          : 'border-ink/10 bg-white hover:border-ink/20 hover:bg-ink/[0.02]'
       } ${isDragging ? 'z-10 opacity-70' : ''}`}
     >
       <button
@@ -74,7 +74,7 @@ export function PageThumbnail({
         {...attributes}
         {...listeners}
         aria-label="Drag to reorder"
-        className="absolute top-1.5 left-1.5 z-10 flex h-6 w-6 cursor-grab items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+        className="absolute top-1.5 left-1.5 z-10 flex h-6 w-6 cursor-grab items-center justify-center rounded-full text-ink/40 hover:bg-ink/8 hover:text-ink/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:cursor-grabbing"
       >
         <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4" aria-hidden="true">
           <circle cx="9" cy="6" r="1.4" />
@@ -91,7 +91,7 @@ export function PageThumbnail({
           type="button"
           onClick={() => onRotate(page.id)}
           aria-label="Rotate page 90°"
-          className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          className="flex h-6 w-6 items-center justify-center rounded-full text-ink/40 hover:bg-ink/8 hover:text-ink/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <svg
             viewBox="0 0 24 24"
@@ -112,7 +112,7 @@ export function PageThumbnail({
           type="button"
           onClick={() => onDelete(page.id)}
           aria-label="Delete page"
-          className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-red-50 hover:text-red-600"
+          className="flex h-6 w-6 items-center justify-center rounded-full text-ink/40 hover:bg-danger/10 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger"
         >
           <svg
             viewBox="0 0 24 24"
@@ -131,13 +131,13 @@ export function PageThumbnail({
         </button>
       </div>
 
-      <label className="absolute bottom-1.5 left-1.5 z-10 flex h-6 w-6 items-center justify-center rounded bg-white/80 hover:bg-white">
+      <label className="absolute bottom-1.5 left-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white/85 hover:bg-white">
         <input
           type="checkbox"
           checked={isSelectedForExtract}
           onChange={() => onToggleExtract(page.id)}
           aria-label="Select page for extraction"
-          className="h-4 w-4 accent-blue-600"
+          className="h-4 w-4 accent-accent"
         />
       </label>
 
@@ -147,10 +147,10 @@ export function PageThumbnail({
         aria-pressed={isSplitAfter}
         aria-label="Split into a new file after this page"
         title="Split into a new file after this page"
-        className={`absolute right-1.5 bottom-1.5 z-10 flex h-6 w-6 items-center justify-center rounded ${
+        className={`absolute right-1.5 bottom-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
           isSplitAfter
-            ? 'bg-blue-600 text-white hover:bg-blue-700'
-            : 'bg-white/80 text-slate-400 hover:bg-white hover:text-slate-600'
+            ? 'bg-accent text-white hover:bg-accent-hover'
+            : 'bg-white/85 text-ink/40 hover:bg-white hover:text-ink/70'
         }`}
       >
         <svg
@@ -173,7 +173,7 @@ export function PageThumbnail({
         aria-current={isSelected}
         className="flex w-full flex-col items-center gap-1.5"
       >
-        <div className="relative flex h-36 w-full items-center justify-center overflow-hidden rounded bg-slate-100">
+        <div className="relative flex h-36 w-full items-center justify-center overflow-hidden rounded-md bg-ink/5">
           <canvas ref={canvasRef} className="max-h-full max-w-full object-contain" />
           {status === 'loading' && (
             <div className="absolute inset-0 flex items-center justify-center">
@@ -181,12 +181,12 @@ export function PageThumbnail({
             </div>
           )}
           {status === 'error' && (
-            <div className="absolute inset-0 flex items-center justify-center px-2 text-center text-xs text-red-500">
+            <div className="absolute inset-0 flex items-center justify-center px-2 text-center text-xs text-danger">
               Couldn&apos;t render
             </div>
           )}
         </div>
-        <span className="text-xs font-medium text-slate-500">{page.sourcePageNumber}</span>
+        <span className="font-mono text-xs text-ink/50">{page.sourcePageNumber}</span>
       </button>
     </div>
   )

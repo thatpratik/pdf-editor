@@ -5,6 +5,7 @@ import type { PageEdit, WorkingPage } from './types'
 import { Spinner } from './Spinner'
 import { TextEditDialog } from './TextEditDialog'
 import { ImageEditDialog } from './ImageEditDialog'
+import { CornerMarks } from './CornerMarks'
 
 /** Scale (before device-pixel-ratio) used for the larger single-page preview. */
 const PREVIEW_SCALE = 1.4
@@ -74,7 +75,7 @@ export function PagePreview({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-slate-700">
+        <h2 className="font-mono text-sm font-medium text-ink/70">
           Page {position} of {totalPages}
         </h2>
         <div className="flex items-center gap-1">
@@ -82,7 +83,7 @@ export function PagePreview({
             type="button"
             onClick={handleOpenImageEdit}
             disabled={status !== 'ready'}
-            className="rounded px-2 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+            className="rounded-md px-2 py-1 text-xs font-medium text-teal hover:bg-teal/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal disabled:cursor-not-allowed disabled:text-ink/25 disabled:hover:bg-transparent"
           >
             Edit images
           </button>
@@ -90,22 +91,23 @@ export function PagePreview({
             type="button"
             onClick={handleOpenTextEdit}
             disabled={status !== 'ready'}
-            className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+            className="rounded-md px-2 py-1 text-xs font-medium text-accent hover:bg-accent/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:text-ink/25 disabled:hover:bg-transparent"
           >
             Edit text
           </button>
         </div>
       </div>
 
-      <div className="relative flex min-h-96 items-center justify-center rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="relative flex min-h-96 items-center justify-center rounded-lg border border-ink/10 bg-white p-3 shadow-sm">
         <canvas ref={canvasRef} className="max-h-[75vh] max-w-full rounded object-contain" />
+        {status === 'ready' && <CornerMarks />}
         {status === 'loading' && (
           <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-white/70">
             <Spinner />
           </div>
         )}
         {status === 'error' && (
-          <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-white/90 px-6 text-center text-sm text-red-500">
+          <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-white/90 px-6 text-center text-sm text-danger">
             Couldn&apos;t render this page.
           </div>
         )}

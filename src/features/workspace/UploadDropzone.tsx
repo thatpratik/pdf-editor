@@ -31,15 +31,11 @@ export function UploadDropzone({ onFilesSelected }: UploadDropzoneProps) {
 
   return (
     <div className="relative flex h-full items-center justify-center overflow-hidden p-8">
-      <div
-        aria-hidden="true"
-        className="absolute top-1/2 left-1/2 h-[36rem] w-[36rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,var(--color-brand-100)_0%,transparent_70%)] opacity-60 blur-2xl"
-      />
       <div className="relative flex min-w-0 w-full max-w-xl flex-col items-center text-center">
-        <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
+        <h2 className="font-display text-4xl italic tracking-tight text-ink">
           Merge, split, reorder, and edit PDFs
         </h2>
-        <p className="mt-2 max-w-md text-base text-slate-600">
+        <p className="mt-2 max-w-md text-base text-ink/60">
           Everything happens right here in your browser — your files are never uploaded
           anywhere.
         </p>
@@ -55,15 +51,15 @@ export function UploadDropzone({ onFilesSelected }: UploadDropzoneProps) {
           }}
           onDragLeave={() => setIsDragActive(false)}
           onDrop={handleDrop}
-          className={`mt-8 flex w-full cursor-pointer flex-col items-center gap-4 rounded-2xl border-2 border-dashed px-10 py-14 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 ${
+          className={`mt-8 flex w-full cursor-pointer flex-col items-center gap-4 rounded-xl border-2 border-dashed px-10 py-14 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${
             isDragActive
-              ? 'scale-[1.01] border-brand-400 bg-brand-50 shadow-lg shadow-brand-500/10'
-              : 'border-slate-300 bg-white shadow-sm hover:border-brand-300 hover:bg-brand-50/40 hover:shadow-md'
+              ? 'scale-[1.01] border-accent bg-accent/5 shadow-lg shadow-accent/10'
+              : 'border-ink/20 bg-white shadow-sm hover:border-accent/40 hover:bg-accent/[0.03]'
           }`}
         >
           <div
             className={`flex h-14 w-14 items-center justify-center rounded-full transition-colors duration-200 ${
-              isDragActive ? 'bg-brand-100' : 'bg-brand-50'
+              isDragActive ? 'bg-accent/15' : 'bg-accent/8'
             }`}
           >
             <svg
@@ -71,9 +67,7 @@ export function UploadDropzone({ onFilesSelected }: UploadDropzoneProps) {
               fill="none"
               stroke="currentColor"
               strokeWidth={1.5}
-              className={`h-6 w-6 transition-colors duration-200 ${
-                isDragActive ? 'text-brand-600' : 'text-brand-500'
-              }`}
+              className="h-6 w-6 text-accent transition-colors duration-200"
               aria-hidden="true"
             >
               <path
@@ -84,10 +78,10 @@ export function UploadDropzone({ onFilesSelected }: UploadDropzoneProps) {
             </svg>
           </div>
           <div>
-            <p className="text-base font-medium text-slate-700">
+            <p className="text-base font-medium text-ink/80">
               Drop PDFs here, or click to choose files
             </p>
-            <p className="mt-1 text-sm text-slate-500">PDF files only, any number at once</p>
+            <p className="mt-1 text-sm text-ink/50">PDF files only, any number at once</p>
           </div>
           <input
             ref={inputRef}

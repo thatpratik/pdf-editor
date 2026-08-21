@@ -232,30 +232,30 @@ function WorkspaceScreen() {
     : null
 
   return (
-    <div className="flex h-screen flex-col bg-slate-50">
-      <header className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
+    <div className="flex h-screen flex-col bg-paper">
+      <header className="flex shrink-0 items-center justify-between border-b border-ink/10 bg-white px-6 py-3">
         <div className="flex items-center gap-2.5">
           <img src="/favicon.svg" alt="" aria-hidden="true" className="h-6 w-6" />
           <div>
-            <h1 className="text-lg font-semibold tracking-tight text-slate-900">PDF Editor</h1>
+            <h1 className="font-display text-xl tracking-tight text-ink">PDF Editor</h1>
             {pages.length > 0 && (
-              <p className="text-xs text-slate-500">
+              <p className="font-mono text-xs text-ink/45">
                 {sourceFiles.length} {sourceFiles.length === 1 ? 'file' : 'files'} ·{' '}
                 {pages.length} {pages.length === 1 ? 'page' : 'pages'}
               </p>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
           {(canUndo || canRedo) && (
-            <div className="flex items-center gap-1">
+            <div className="mr-2 flex items-center gap-0.5 border-r border-ink/10 pr-2">
               <button
                 type="button"
                 onClick={undo}
                 disabled={!canUndo}
                 aria-label="Undo"
                 title="Undo (Ctrl/Cmd+Z)"
-                className="rounded px-2 py-1 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+                className="rounded-md px-2 py-1.5 text-sm font-medium text-ink/55 hover:bg-ink/6 hover:text-ink/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:text-ink/25 disabled:hover:bg-transparent"
               >
                 Undo
               </button>
@@ -265,7 +265,7 @@ function WorkspaceScreen() {
                 disabled={!canRedo}
                 aria-label="Redo"
                 title="Redo (Ctrl/Cmd+Shift+Z)"
-                className="rounded px-2 py-1 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+                className="rounded-md px-2 py-1.5 text-sm font-medium text-ink/55 hover:bg-ink/6 hover:text-ink/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:text-ink/25 disabled:hover:bg-transparent"
               >
                 Redo
               </button>
@@ -273,20 +273,12 @@ function WorkspaceScreen() {
           )}
           {pages.length > 0 && (
             <>
-              <button
-                type="button"
-                onClick={handleDownload}
-                disabled={isExporting}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
-              >
-                {isExporting ? 'Building…' : 'Download'}
-              </button>
               {selectedForExtractIds.size > 0 && (
                 <button
                   type="button"
                   onClick={handleExtractSelected}
                   disabled={isExtracting}
-                  className="rounded-md border border-blue-600 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-blue-300 disabled:text-blue-300 disabled:hover:bg-transparent"
+                  className="rounded-md border border-accent/40 px-3.5 py-2 text-sm font-medium text-accent hover:bg-accent/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:border-ink/15 disabled:text-ink/30 disabled:hover:bg-transparent"
                 >
                   {isExtracting
                     ? 'Extracting…'
@@ -298,51 +290,61 @@ function WorkspaceScreen() {
                   type="button"
                   onClick={handleSplit}
                   disabled={isSplitting}
-                  className="rounded-md border border-blue-600 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-blue-300 disabled:text-blue-300 disabled:hover:bg-transparent"
+                  className="rounded-md border border-accent/40 px-3.5 py-2 text-sm font-medium text-accent hover:bg-accent/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:border-ink/15 disabled:text-ink/30 disabled:hover:bg-transparent"
                 >
                   {isSplitting ? 'Splitting…' : `Split into ${splitAfterPageIds.size + 1} files`}
                 </button>
               )}
               <button
                 type="button"
-                onClick={() => addMoreInputRef.current?.click()}
-                disabled={uploadStatus === 'loading'}
-                className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline"
+                onClick={handleDownload}
+                disabled={isExporting}
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-accent/40"
               >
-                Add more files
+                {isExporting ? 'Building…' : 'Download'}
               </button>
-              <input
-                ref={addMoreInputRef}
-                type="file"
-                accept="application/pdf,.pdf"
-                multiple
-                className="hidden"
-                onChange={(event) => {
-                  const files = Array.from(event.target.files ?? [])
-                  event.target.value = ''
-                  if (files.length > 0) handleFilesSelected(files)
-                }}
-              />
-              <button
-                type="button"
-                onClick={handleClearAll}
-                className="text-sm font-medium text-slate-500 hover:text-slate-700 hover:underline"
-              >
-                Clear all
-              </button>
+              <div className="ml-1 flex items-center gap-1 border-l border-ink/10 pl-3">
+                <button
+                  type="button"
+                  onClick={() => addMoreInputRef.current?.click()}
+                  disabled={uploadStatus === 'loading'}
+                  className="rounded-md px-2 py-1.5 text-sm font-medium text-ink/55 hover:bg-ink/6 hover:text-ink/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:text-ink/25 disabled:hover:bg-transparent"
+                >
+                  Add more files
+                </button>
+                <input
+                  ref={addMoreInputRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  multiple
+                  className="hidden"
+                  onChange={(event) => {
+                    const files = Array.from(event.target.files ?? [])
+                    event.target.value = ''
+                    if (files.length > 0) handleFilesSelected(files)
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleClearAll}
+                  className="rounded-md px-2 py-1.5 text-sm font-medium text-ink/55 hover:bg-danger/8 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger"
+                >
+                  Clear all
+                </button>
+              </div>
             </>
           )}
         </div>
       </header>
 
       {pages.length > 0 && uploadStatus === 'loading' && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 bg-blue-50 px-6 py-2 text-sm text-blue-700">
+        <div className="flex shrink-0 items-center gap-2 border-b border-ink/10 bg-accent/6 px-6 py-2 text-sm text-accent">
           <Spinner className="h-4 w-4" />
           <span>Loading new file(s)…</span>
         </div>
       )}
       {pages.length > 0 && uploadStatus === 'error' && uploadError && (
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-red-200 bg-red-50 px-6 py-2 text-sm text-red-700">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-danger/20 bg-danger/6 px-6 py-2 text-sm text-danger">
           <span>{uploadError}</span>
           <button
             type="button"
@@ -354,7 +356,7 @@ function WorkspaceScreen() {
         </div>
       )}
       {downloadError && (
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-red-200 bg-red-50 px-6 py-2 text-sm text-red-700">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-danger/20 bg-danger/6 px-6 py-2 text-sm text-danger">
           <span>{downloadError}</span>
           <button
             type="button"
@@ -372,7 +374,7 @@ function WorkspaceScreen() {
         )}
 
         {pages.length === 0 && uploadStatus === 'loading' && (
-          <div className="flex h-full items-center justify-center gap-3 text-slate-600">
+          <div className="flex h-full items-center justify-center gap-3 text-ink/70">
             <Spinner />
             <span className="text-base font-medium">Loading PDF…</span>
           </div>
@@ -380,13 +382,13 @@ function WorkspaceScreen() {
 
         {pages.length === 0 && uploadStatus === 'error' && (
           <div className="flex h-full items-center justify-center p-8">
-            <div className="max-w-md rounded-2xl border border-red-200 bg-red-50 px-8 py-10 text-center shadow-sm">
-              <p className="text-base font-medium text-red-700">Couldn&apos;t open this file</p>
-              <p className="mt-2 text-sm text-red-600">{uploadError}</p>
+            <div className="max-w-md rounded-xl border border-danger/20 bg-danger/5 px-8 py-10 text-center shadow-sm">
+              <p className="text-base font-medium text-danger">Couldn&apos;t open this file</p>
+              <p className="mt-2 text-sm text-danger/80">{uploadError}</p>
               <button
                 type="button"
                 onClick={() => setUploadStatus('idle')}
-                className="mt-6 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+                className="mt-6 rounded-md bg-danger px-4 py-2 text-sm font-medium text-white hover:bg-danger-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-visible:ring-offset-2"
               >
                 Try another file
               </button>
@@ -413,7 +415,7 @@ function WorkspaceScreen() {
                 onToggleSplitAfter={handleToggleSplitAfter}
               />
             </div>
-            <aside className="w-[26rem] shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-6">
+            <aside className="w-[26rem] shrink-0 overflow-y-auto border-l border-ink/10 bg-white p-6">
               {selectedPage && selectedDoc && (
                 <PagePreview
                   doc={selectedDoc}
