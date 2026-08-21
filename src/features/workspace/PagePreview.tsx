@@ -1,18 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import type { PageViewport } from 'pdfjs-dist'
 import type { PDFDocumentProxy } from '../../lib/pdf'
-import { getPageViewport, renderPageToCanvas } from '../../lib/pdf'
-import { getPageImageRegions } from '../../lib/imageRegions'
-import type { ImageRegion } from '../../lib/imageRegions'
+import { renderPageToCanvas } from '../../lib/pdf'
 import type { PageEdit, WorkingPage } from './types'
 import { Spinner } from './Spinner'
-import { ImageRegionOverlay } from './ImageRegionOverlay'
 import { TextEditDialog } from './TextEditDialog'
+import { ImageEditDialog } from './ImageEditDialog'
 
 /** Scale (before device-pixel-ratio) used for the larger single-page preview. */
 const PREVIEW_SCALE = 1.4
 
 type TextEdit = Extract<PageEdit, { type: 'text' }>
+type ImageEdit = Extract<PageEdit, { type: 'image' }>
 
 interface PagePreviewProps {
   doc: PDFDocumentProxy
@@ -21,9 +19,10 @@ interface PagePreviewProps {
   position: number
   totalPages: number
   onApplyTextEdit: (edit: TextEdit) => void
-  /** Whether the once-per-session text-edit disclosure has already been shown/dismissed. */
-  hasSeenTextEditCaveat: boolean
-  onDismissTextEditCaveat: () => void
+  onApplyImageEdit: (edit: ImageEdit) => void
+  /** Whether the once-per-session edit disclosure has already been shown/dismissed. */
+  hasSeenEditCaveat: boolean
+  onDismissEditCaveat: () => void
 }
 
 /** Larger canvas render of the selected working page, shown in the side panel. */
@@ -33,16 +32,16 @@ export function PagePreview({
   position,
   totalPages,
   onApplyTextEdit,
-  hasSeenTextEditCaveat,
-  onDismissTextEditCaveat,
+  onApplyImageEdit,
+  hasSeenEditCaveat,
+  onDismissEditCaveat,
 }: PagePreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [viewport, setViewport] = useState<PageViewport | null>(null)
   const [displayScale, setDisplayScale] = useState(1)
   const [isEditingText, setIsEditingText] = useState(false)
-  const [isShowingImages, setIsShowingImages] = useState(false)
-  const [imageRegions, setImageRegions] = useState<ImageRegion[] | null>(null)
+  const [isEditingImages, setIsEditingImages] = useState(false)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -172,8 +171,8 @@ export function PagePreview({
           position={position}
           totalPages={totalPages}
           onApplyTextEdit={onApplyTextEdit}
-          hasSeenTextEditCaveat={hasSeenTextEditCaveat}
-          onDismissTextEditCaveat={onDismissTextEditCaveat}
+          hasSeenEditCaveat={hasSeenEditCaveat}
+          onDismissEditCaveat={onDismissEditCaveat}
           onClose={() => setIsEditingText(false)}
         />
       )}

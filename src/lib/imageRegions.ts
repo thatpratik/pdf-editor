@@ -1,4 +1,5 @@
 import { OPS, Util } from 'pdfjs-dist'
+import type { PageViewport } from 'pdfjs-dist'
 import type { PDFDocumentProxy } from './pdf'
 import type { PdfRect } from '../features/workspace/types'
 
@@ -61,6 +62,47 @@ export async function getPageImageRegions(
   }
 
   return regions
+}
+
+/**
+ * Extracts an image region's current pixels as PNG bytes, by cropping the
+ * relevant rectangle out of the page's already-rendered canvas rather than
+ * reading the PDF's internal image stream directly. pdf-lib's public API can
+ * write new image XObjects onto a page, but has no supported way to read a
+ * *specific* existing one back out — and even if it did, a raw stream's
+ * bytes aren't necessarily valid standalone JPEG/PNG file bytes on their
+ * own (that depends on the stream's filter and color space). Cropping the
+ * canvas sidesteps both problems: it always yields a normal, self-contained
+ * PNG, using exactly the pixels the user has been looking at. The trade-off
+ * is a re-rasterization at the canvas's current render resolution rather
+ * than the original image's native resolution — an accepted v1
+ * simplification, not a bug to chase down.
+ */
+export async function cropRegionToPng(
+  canvas: HTMLCanvasElement,
+  region: ImageRegion,
+  viewport: PageViewport,
+): Promise<Uint8Array> {
+  const [x1, y1] = viewport.convertToViewportPoint(region.boundingBox.x, region.boundingBox.y)
+  const [x2, y2] = viewport.convertToViewportPoint(
+    region.boundingBox.x + region.boundingBox.width,
+    region.boundingBox.y + region.boundingBox.height,
+  )
+  const left = Math.min(x1, x2)
+  const top = Math.min(y1, y2)
+  const width = Math.abs(x2 - x1)
+  const height = Math.abs(y2 - y1)
+
+  const offscreen = document.createElement('canvas')
+  offscreen.width = Math.max(1, Math.round(width))
+  offscreen.height = Math.max(1, Math.round(height))
+  const ctx = offscreen.getContext('2d')
+  if (!ctx) throw new Error('2D canvas context unavailable')
+  ctx.drawImage(canvas, left, top, width, height, 0, 0, offscreen.width, offscreen.height)
+
+  const blob = await new Promise<Blob | null>((resolve) => offscreen.toBlob(resolve, 'image/png'))
+  if (!blob) throw new Error('Failed to encode cropped image region')
+  return new Uint8Array(await blob.arrayBuffer())
 }
 
 /** Maps the unit square (0,0)-(1,1) through `ctm` and returns its axis-aligned bounding box. */

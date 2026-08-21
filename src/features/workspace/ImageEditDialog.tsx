@@ -2,63 +2,68 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PageViewport } from 'pdfjs-dist'
 import type { PDFDocumentProxy } from '../../lib/pdf'
 import { getPageViewport, renderPageToCanvas } from '../../lib/pdf'
-import { getTextBlocks } from '../../lib/textBlocks'
-import type { TextBlock } from '../../lib/textBlocks'
-import { matchStandardFont } from '../../lib/pdfExport'
-import type { PageEdit, WorkingPage } from './types'
+import { getPageImageRegions, cropRegionToPng } from '../../lib/imageRegions'
+import type { ImageRegion } from '../../lib/imageRegions'
+import type { Box } from './ImageRegionOverlay'
+import type { PageEdit, PdfRect, WorkingPage } from './types'
 import { Spinner } from './Spinner'
-import { TextEditOverlay } from './TextEditOverlay'
+import { ImageRegionOverlay } from './ImageRegionOverlay'
 
 /**
  * Backing-store render scale (before device-pixel-ratio) for the canvas
- * inside this dialog. This controls sharpness only, not the displayed
- * size — the canvas's CSS `max-width` (see the canvas's className below)
- * is what actually determines how big the page looks on screen, since a
- * canvas's CSS size clamp divides back out any resolution increase here.
- * Kept above 1 purely so the page stays crisp on high-DPI displays once
- * scaled up to fill most of the dialog's width.
+ * inside this dialog. Controls sharpness only — see the identical constant
+ * in `TextEditDialog` for why this doesn't affect the displayed size.
  */
 const DIALOG_SCALE = 2.2
 
-type TextEdit = Extract<PageEdit, { type: 'text' }>
+type ImageEdit = Extract<PageEdit, { type: 'image' }>
 
-interface TextEditDialogProps {
+interface ImageEditDialogProps {
   doc: PDFDocumentProxy
   page: WorkingPage
   /** 1-based position of this page within the current working set. */
   position: number
   totalPages: number
-  onApplyTextEdit: (edit: TextEdit) => void
-  /** Whether the once-per-session text-edit disclosure has already been shown/dismissed. */
+  onApplyImageEdit: (edit: ImageEdit) => void
+  /** Whether the once-per-session edit disclosure has already been shown/dismissed. */
   hasSeenEditCaveat: boolean
   onDismissEditCaveat: () => void
   onClose: () => void
 }
 
+/** Converts a committed screen-gesture box (raw viewport units) into a PDF-space rect. */
+function boxToPdfRect(box: Box, viewport: PageViewport): PdfRect {
+  const [x1, y1] = viewport.convertToPdfPoint(box.left, box.top)
+  const [x2, y2] = viewport.convertToPdfPoint(box.left + box.width, box.top + box.height)
+  return {
+    x: Math.min(x1, x2),
+    y: Math.min(y1, y2),
+    width: Math.abs(x2 - x1),
+    height: Math.abs(y2 - y1),
+  }
+}
+
 /**
- * Full-screen dialog for in-place text editing, replacing the old approach
- * of overlaying edit boxes directly on the small (`w-[26rem]`) sidebar
- * preview — that panel is too narrow for multiple edit boxes and their
- * hover controls to sit in without feeling cramped. This dialog renders its
- * own, larger canvas independent of the sidebar's, so editing gets much more
- * screen space without changing how the small preview behaves when not
- * editing.
+ * Full-screen dialog for moving, resizing, and deleting existing images on a
+ * page — the same "give this its own dialog rather than the cramped sidebar
+ * panel" treatment `TextEditDialog` already got. Owns its own, larger canvas
+ * render, independent of the small `PagePreview` panel.
  */
-export function TextEditDialog({
+export function ImageEditDialog({
   doc,
   page,
   position,
   totalPages,
-  onApplyTextEdit,
+  onApplyImageEdit,
   hasSeenEditCaveat,
   onDismissEditCaveat,
   onClose,
-}: TextEditDialogProps) {
+}: ImageEditDialogProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [viewport, setViewport] = useState<PageViewport | null>(null)
   const [displayScale, setDisplayScale] = useState(1)
-  const [textBlocks, setTextBlocks] = useState<TextBlock[] | null>(null)
+  const [imageRegions, setImageRegions] = useState<ImageRegion[] | null>(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -91,45 +96,54 @@ export function TextEditDialog({
 
   useEffect(() => {
     let cancelled = false
-    getTextBlocks(doc, page.sourcePageNumber).then((blocks) => {
-      if (!cancelled) setTextBlocks(blocks)
+    getPageImageRegions(doc, page.sourcePageNumber).then((regions) => {
+      if (!cancelled) setImageRegions(regions)
     })
     return () => {
       cancelled = true
     }
   }, [doc, page.sourcePageNumber])
 
-  // Blurring the active element before closing (via Escape, the backdrop, or
-  // the Done button) ensures a pending edit still commits through the edit
-  // box's own onBlur handler rather than being silently dropped.
-  const closeAndCommitPending = useCallback(() => {
-    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
-    onClose()
-  }, [onClose])
+  const handleClose = useCallback(() => onClose(), [onClose])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeAndCommitPending()
+      if (event.key === 'Escape') handleClose()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [closeAndCommitPending])
+  }, [handleClose])
 
-  const handleCommitBlock = (block: TextBlock, newText: string) => {
-    if (newText === block.text) return
-    onApplyTextEdit({
-      type: 'text',
-      boundingBox: block.boundingBox,
-      newText,
-      fontKey: matchStandardFont(block.fontFamilyHint),
-      fontSize: block.fontSize,
+  const handleCommitRegion = async (region: ImageRegion, box: Box | null) => {
+    if (!viewport || !canvasRef.current) return
+
+    if (!box) {
+      // Deleted: nothing to draw, so no pixels need extracting.
+      onApplyImageEdit({
+        type: 'image',
+        originalBoundingBox: region.boundingBox,
+        newBoundingBox: null,
+        imageBytes: new Uint8Array(),
+        imageFormat: 'png',
+      })
+      return
+    }
+
+    const newBoundingBox = boxToPdfRect(box, viewport)
+    const imageBytes = await cropRegionToPng(canvasRef.current, region, viewport)
+    onApplyImageEdit({
+      type: 'image',
+      originalBoundingBox: region.boundingBox,
+      newBoundingBox,
+      imageBytes,
+      imageFormat: 'png',
     })
   }
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-6"
-      onClick={closeAndCommitPending}
+      onClick={handleClose}
     >
       <div
         className="flex max-h-full w-full max-w-[95vw] flex-col gap-3 rounded-xl bg-white p-4 shadow-2xl"
@@ -137,12 +151,12 @@ export function TextEditDialog({
       >
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium text-slate-700">
-            Editing text — page {position} of {totalPages}
+            Editing images — page {position} of {totalPages}
           </h2>
           <button
             type="button"
-            onClick={closeAndCommitPending}
-            className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+            onClick={handleClose}
+            className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
           >
             Done editing
           </button>
@@ -151,9 +165,9 @@ export function TextEditDialog({
         {!hasSeenEditCaveat && (
           <div className="flex items-start justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             <span>
-              Edited or covered text isn&apos;t fully removed from the file — it&apos;s visually
-              replaced, but the original content can still be recovered by inspecting the PDF
-              directly.
+              Edited or covered content isn&apos;t fully removed from the file — it&apos;s
+              visually replaced, but the original content can still be recovered by inspecting
+              the PDF directly.
             </span>
             <button
               type="button"
@@ -167,24 +181,16 @@ export function TextEditDialog({
 
         <div className="relative flex flex-1 items-center justify-center overflow-auto rounded-lg border border-slate-200 bg-slate-100 p-4">
           <div className="relative inline-block">
-            {/* Sized by width only (no max-height): a canvas's CSS
-                max-height/max-width clamp the *displayed* size independent
-                of how high its backing-store resolution is rendered, so
-                capping height here would silently undo any attempt to make
-                text bigger. Letting width drive the size and scrolling
-                vertically (the frame below is `overflow-auto`) is what
-                makes the natural, un-enlarged text big enough to edit
-                without needing a separate "pop out bigger on focus" step. */}
             <canvas
               ref={canvasRef}
               className="max-w-[88vw] rounded bg-white object-contain shadow"
             />
-            {viewport && textBlocks && (
-              <TextEditOverlay
-                blocks={textBlocks}
+            {viewport && imageRegions && (
+              <ImageRegionOverlay
+                regions={imageRegions}
                 viewport={viewport}
                 displayScale={displayScale}
-                onCommit={handleCommitBlock}
+                onCommit={handleCommitRegion}
               />
             )}
           </div>

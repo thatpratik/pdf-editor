@@ -8,6 +8,13 @@ interface ImageRegionOverlayProps {
   viewport: PageViewport
   /** Backing-store-pixels-to-displayed-CSS-pixels ratio for the canvas underneath this overlay. */
   displayScale: number
+  /**
+   * Called once a drag/resize gesture releases (with the region's final raw
+   * viewport-space box) or a region is deleted (with `null`). Not called for
+   * a click that didn't actually move/resize anything, so a no-op click
+   * doesn't produce a spurious edit.
+   */
+  onCommit: (region: ImageRegion, box: Box | null) => void
 }
 
 /**
@@ -20,7 +27,7 @@ interface ImageRegionOverlayProps {
  * position from this fixed raw geometry instead of the box silently
  * drifting out of alignment with the canvas underneath it.
  */
-interface Box {
+export interface Box {
   left: number
   top: number
   width: number
@@ -61,16 +68,15 @@ function initialBox(region: ImageRegion, viewport: PageViewport): Box {
 /**
  * Draggable/resizable/deletable bounding-box overlay over each detected
  * image on the page, layered atop the already-rendered canvas the same way
- * `TextEditOverlay` is. This is the interaction-only slice of Phase 8 Step
- * 2: box geometry lives entirely in local component state (in raw viewport
- * units, scaled to screen pixels at render time via `displayScale`) and
- * is discarded on unmount — there is no `APPLY_IMAGE_EDIT` reducer action or
- * `buildPdf` wiring yet, so nothing here is undoable or reflected in the
- * downloaded PDF. Its purpose is to validate that drag/resize/delete feels
- * right before committing to the PDF-space edit-recording and export-time
- * redraw logic that comes next.
+ * `TextEditOverlay` is. Box geometry lives in local component state (in raw
+ * viewport units, scaled to screen pixels at render time via `displayScale`)
+ * while a gesture is in progress, purely for smooth, immediate visual
+ * feedback — `onCommit` is what turns a finished gesture into a real,
+ * PDF-space edit (see `ImageEditDialog`, which converts the committed box
+ * into `PdfRect` coordinates and extracts the image's pixels before
+ * dispatching `APPLY_IMAGE_EDIT`).
  */
-export function ImageRegionOverlay({ regions, viewport, displayScale }: ImageRegionOverlayProps) {
+export function ImageRegionOverlay({ regions, viewport, displayScale, onCommit }: ImageRegionOverlayProps) {
   const [boxes, setBoxes] = useState<Record<string, RegionBoxState>>(() =>
     Object.fromEntries(
       regions.map((region) => [region.id, { ...initialBox(region, viewport), deleted: false }]),
@@ -115,12 +121,27 @@ export function ImageRegionOverlay({ regions, viewport, displayScale }: ImageReg
   }
 
   const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (dragRef.current) event.currentTarget.releasePointerCapture(event.pointerId)
+    const drag = dragRef.current
+    if (!drag) return
+    event.currentTarget.releasePointerCapture(event.pointerId)
     dragRef.current = null
+
+    const box = boxes[drag.id]
+    const region = regions.find((candidate) => candidate.id === drag.id)
+    if (!box || !region) return
+    const unchanged =
+      box.left === drag.start.left &&
+      box.top === drag.start.top &&
+      box.width === drag.start.width &&
+      box.height === drag.start.height
+    if (unchanged) return
+    onCommit(region, box)
   }
 
   const handleDelete = (id: string) => {
     setBoxes((current) => ({ ...current, [id]: { ...current[id], deleted: true } }))
+    const region = regions.find((candidate) => candidate.id === id)
+    if (region) onCommit(region, null)
   }
 
   return (

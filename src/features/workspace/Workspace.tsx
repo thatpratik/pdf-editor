@@ -49,7 +49,7 @@ function WorkspaceScreen() {
   const [isSplitting, setIsSplitting] = useState(false)
   // Whether the once-per-session text-edit disclosure (edited/covered text
   // isn't truly removed from the file) has been shown yet.
-  const [hasSeenTextEditCaveat, setHasSeenTextEditCaveat] = useState(false)
+  const [hasSeenEditCaveat, setHasSeenEditCaveat] = useState(false)
 
   const addMoreInputRef = useRef<HTMLInputElement>(null)
 
@@ -421,8 +421,8 @@ function WorkspaceScreen() {
                   onApplyTextEdit={(edit) =>
                     dispatch({ type: 'APPLY_TEXT_EDIT', pageId: selectedPage.id, edit })
                   }
-                  hasSeenTextEditCaveat={hasSeenTextEditCaveat}
-                  onDismissTextEditCaveat={() => setHasSeenTextEditCaveat(true)}
+                  hasSeenEditCaveat={hasSeenEditCaveat}
+                  onDismissEditCaveat={() => setHasSeenEditCaveat(true)}
                 />
               )}
             </aside>
