@@ -180,8 +180,8 @@ export function ImageEditDialog({
           </div>
         )}
 
-        <div className="relative flex flex-1 items-center justify-center overflow-auto rounded-lg border border-ink/10 bg-sunken p-4">
-          <div className="relative inline-block">
+        <div className="relative flex flex-1 overflow-auto rounded-lg border border-ink/10 bg-sunken p-4">
+          <div className="relative m-auto inline-block">
             <canvas
               ref={canvasRef}
               className="max-w-[88vw] rounded bg-surface object-contain shadow"

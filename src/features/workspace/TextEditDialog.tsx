@@ -166,8 +166,8 @@ export function TextEditDialog({
           </div>
         )}
 
-        <div className="relative flex flex-1 items-center justify-center overflow-auto rounded-lg border border-ink/10 bg-sunken p-4">
-          <div className="relative inline-block">
+        <div className="relative flex flex-1 overflow-auto rounded-lg border border-ink/10 bg-sunken p-4">
+          <div className="relative m-auto inline-block">
             {/* Sized by width only (no max-height): a canvas's CSS
                 max-height/max-width clamp the *displayed* size independent
                 of how high its backing-store resolution is rendered, so
@@ -175,7 +175,12 @@ export function TextEditDialog({
                 text bigger. Letting width drive the size and scrolling
                 vertically (the frame below is `overflow-auto`) is what
                 makes the natural, un-enlarged text big enough to edit
-                without needing a separate "pop out bigger on focus" step. */}
+                without needing a separate "pop out bigger on focus" step.
+                `m-auto` (not `items-center`/`justify-center` on the scroll
+                container) keeps content centered when it fits but lets it
+                scroll flush from the start edge once it overflows — center
+                alignment on the scrollable element itself would hide half
+                the overflow beyond the reachable scroll range. */}
             <canvas
               ref={canvasRef}
               className="max-w-[88vw] rounded bg-surface object-contain shadow"
