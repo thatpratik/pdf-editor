@@ -47,8 +47,10 @@ function WorkspaceScreen() {
   // not history" reasoning as selectedForExtractIds above.
   const [splitAfterPageIds, setSplitAfterPageIds] = useState<Set<string>>(new Set())
   const [isSplitting, setIsSplitting] = useState(false)
-  // Whether the once-per-session text-edit disclosure (edited/covered text
-  // isn't truly removed from the file) has been shown yet.
+  // Whether the once-per-session edit disclosure (edited/covered text or
+  // images aren't truly removed from the file) has been shown yet — shared
+  // between TextEditDialog and ImageEditDialog, since it's the same
+  // underlying limitation either way.
   const [hasSeenEditCaveat, setHasSeenEditCaveat] = useState(false)
 
   const addMoreInputRef = useRef<HTMLInputElement>(null)
@@ -420,6 +422,9 @@ function WorkspaceScreen() {
                   totalPages={pages.length}
                   onApplyTextEdit={(edit) =>
                     dispatch({ type: 'APPLY_TEXT_EDIT', pageId: selectedPage.id, edit })
+                  }
+                  onApplyImageEdit={(edit) =>
+                    dispatch({ type: 'APPLY_IMAGE_EDIT', pageId: selectedPage.id, edit })
                   }
                   hasSeenEditCaveat={hasSeenEditCaveat}
                   onDismissEditCaveat={() => setHasSeenEditCaveat(true)}

@@ -38,8 +38,6 @@ export function PagePreview({
 }: PagePreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
-  const [viewport, setViewport] = useState<PageViewport | null>(null)
-  const [displayScale, setDisplayScale] = useState(1)
   const [isEditingText, setIsEditingText] = useState(false)
   const [isEditingImages, setIsEditingImages] = useState(false)
 
@@ -49,62 +47,28 @@ export function PagePreview({
 
     setStatus('loading')
     setIsEditingText(false)
-    setIsShowingImages(false)
+    setIsEditingImages(false)
     const scale = PREVIEW_SCALE * (window.devicePixelRatio || 1)
     const handle = renderPageToCanvas(doc, page.sourcePageNumber, canvas, scale, page.rotation)
 
     handle.promise.then(() => setStatus('ready')).catch(() => setStatus('error'))
-    getPageViewport(doc, page.sourcePageNumber, scale, page.rotation).then(setViewport)
 
     return () => handle.cancel()
   }, [doc, page.sourcePageNumber, page.rotation])
 
-  // The canvas's backing-store resolution (for sharpness) differs from its
-  // displayed CSS size (clamped by max-h-[75vh]/max-w-full) — this factor
-  // is what lets the image-region overlay line up with the visible page.
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas || status !== 'ready') return
-
-    const updateScale = () => {
-      const rect = canvas.getBoundingClientRect()
-      if (canvas.width > 0 && rect.width > 0) setDisplayScale(rect.width / canvas.width)
-    }
-    updateScale()
-
-    const observer = new ResizeObserver(updateScale)
-    observer.observe(canvas)
-    return () => observer.disconnect()
-  }, [status])
-
-  useEffect(() => {
-    if (!isShowingImages) return
-    let cancelled = false
-    getPageImageRegions(doc, page.sourcePageNumber).then((regions) => {
-      if (!cancelled) setImageRegions(regions)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [isShowingImages, doc, page.sourcePageNumber])
-
-  // Text editing opens in its own full-screen `TextEditDialog` rather than
+  // Text/image editing each open in their own full-screen dialog rather than
   // overlaying edit boxes on this panel — the panel is a fixed, fairly
   // narrow sidebar column, too cramped for multiple edit boxes and their
-  // hover controls. Closing images first avoids leaving a stale "Show
-  // images" overlay active behind the dialog for no reason.
+  // hover controls. Closing the other editor first avoids leaving a stale
+  // dialog-behind-a-dialog state for no reason.
   const handleOpenTextEdit = () => {
-    setIsShowingImages(false)
-    setImageRegions(null)
+    setIsEditingImages(false)
     setIsEditingText(true)
   }
 
-  const handleToggleShowImages = () => {
-    setIsShowingImages((current) => {
-      const next = !current
-      if (!next) setImageRegions(null)
-      return next
-    })
+  const handleOpenImageEdit = () => {
+    setIsEditingText(false)
+    setIsEditingImages(true)
   }
 
   return (
@@ -116,15 +80,11 @@ export function PagePreview({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={handleToggleShowImages}
+            onClick={handleOpenImageEdit}
             disabled={status !== 'ready'}
-            className={`rounded px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent ${
-              isShowingImages
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                : 'text-emerald-600 hover:bg-emerald-50'
-            }`}
+            className="rounded px-2 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
           >
-            {isShowingImages ? 'Hide images' : 'Show images'}
+            Edit images
           </button>
           <button
             type="button"
@@ -138,20 +98,7 @@ export function PagePreview({
       </div>
 
       <div className="relative flex min-h-96 items-center justify-center rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-        {/* inline-block so this wrapper's box exactly matches the canvas's
-            rendered size (not the whole centered container) — the overlay
-            below positions itself relative to this, so it lines up with
-            the canvas regardless of how much empty space surrounds it. */}
-        <div className="relative inline-block">
-          <canvas ref={canvasRef} className="max-h-[75vh] max-w-full rounded object-contain" />
-          {isShowingImages && viewport && imageRegions && (
-            <ImageRegionOverlay
-              regions={imageRegions}
-              viewport={viewport}
-              displayScale={displayScale}
-            />
-          )}
-        </div>
+        <canvas ref={canvasRef} className="max-h-[75vh] max-w-full rounded object-contain" />
         {status === 'loading' && (
           <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-white/70">
             <Spinner />
@@ -174,6 +121,19 @@ export function PagePreview({
           hasSeenEditCaveat={hasSeenEditCaveat}
           onDismissEditCaveat={onDismissEditCaveat}
           onClose={() => setIsEditingText(false)}
+        />
+      )}
+
+      {isEditingImages && (
+        <ImageEditDialog
+          doc={doc}
+          page={page}
+          position={position}
+          totalPages={totalPages}
+          onApplyImageEdit={onApplyImageEdit}
+          hasSeenEditCaveat={hasSeenEditCaveat}
+          onDismissEditCaveat={onDismissEditCaveat}
+          onClose={() => setIsEditingImages(false)}
         />
       )}
     </div>

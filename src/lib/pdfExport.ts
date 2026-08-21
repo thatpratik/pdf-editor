@@ -134,7 +134,10 @@ async function applyEdit(
   edit: PageEdit,
   embeddedFontsByKey: Map<StandardFonts, PDFFont>,
 ): Promise<void> {
-  if (edit.type !== 'text') return // image edits land in Phase 8
+  if (edit.type === 'image') {
+    await applyImageEdit(outputDoc, page, edit)
+    return
+  }
 
   const { x, y, width, height } = edit.boundingBox
 
@@ -162,6 +165,37 @@ async function applyEdit(
     const lineY = boxTop - edit.fontSize - index * lineHeight
     page.drawText(line, { x, y: lineY, size: edit.fontSize, font })
   })
+}
+
+type ImageEdit = Extract<PageEdit, { type: 'image' }>
+
+/**
+ * Draws one image edit onto an already-copied page: occlude the image's
+ * original spot, then — unless it was deleted (`newBoundingBox: null`) —
+ * embed the edit's captured pixels (a PNG crop of the page canvas at commit
+ * time, see `cropRegionToPng`) and draw them at the new position/size. Like
+ * the text-edit case above, the original image's bytes remain physically
+ * present in the page's content stream underneath the occluding rectangle —
+ * covered, not removed, per the same disclosure shown wherever editing is
+ * offered.
+ */
+async function applyImageEdit(
+  outputDoc: PDFDocument,
+  page: Awaited<ReturnType<PDFDocument['copyPages']>>[number],
+  edit: ImageEdit,
+): Promise<void> {
+  const { x, y, width, height } = edit.originalBoundingBox
+  page.drawRectangle({ x, y, width, height, color: rgb(1, 1, 1) })
+
+  if (!edit.newBoundingBox) return // deleted — nothing further to draw
+
+  const embeddedImage =
+    edit.imageFormat === 'jpg'
+      ? await outputDoc.embedJpg(edit.imageBytes)
+      : await outputDoc.embedPng(edit.imageBytes)
+
+  const { x: nx, y: ny, width: nw, height: nh } = edit.newBoundingBox
+  page.drawImage(embeddedImage, { x: nx, y: ny, width: nw, height: nh })
 }
 
 /** Triggers a browser download of already-built PDF bytes. */
