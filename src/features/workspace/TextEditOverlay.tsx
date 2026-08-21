@@ -11,16 +11,6 @@ interface TextEditOverlayProps {
 }
 
 /**
- * Floor on the *focused* edit box's font size, in CSS pixels. Typical PDF
- * body text renders down around 10-13px at this app's preview scale —
- * legible to read but cramped to click into and type in. Only the currently
- * focused block gets this treatment (see below); every other block renders
- * at its true, unmodified size so the page keeps looking exactly like the
- * source document until the user actually clicks into something.
- */
-const MIN_EDIT_FONT_PX = 15
-
-/**
  * One absolutely-positioned, contentEditable box per detected text block,
  * layered on top of the already-rendered page canvas. Sized/positioned by
  * converting each block's PDF-space bounding box through the same viewport
@@ -30,12 +20,12 @@ const MIN_EDIT_FONT_PX = 15
  * happens later, at download time.
  *
  * Only the currently focused block is visually "popped out" (opaque
- * background, border, floor on font size, raised above its neighbors, and
- * its actual text made visible). Every other block renders with fully
- * transparent text and no fill — a click target sitting over the untouched
- * canvas, not a visible duplicate of it. This split exists for two reasons
- * discovered against a real, densely-packed document (a multi-row form):
- * enlarging every block's font at once made them all collide into an
+ * background, border, raised above its neighbors, and its actual text made
+ * visible, all at its true, unenlarged size). Every other block renders
+ * with fully transparent text and no fill — a click target sitting over the
+ * untouched canvas, not a visible duplicate of it. This split exists for two
+ * reasons discovered against a real, densely-packed document (a multi-row
+ * form): enlarging every block's font at once made them all collide into an
  * unreadable, "scrambled" mess and covered up the surrounding non-text
  * layout (table lines, alignment) that gives the page its context; and,
  * independently, the browser's own line-wrapping inside a multi-line block
@@ -44,6 +34,13 @@ const MIN_EDIT_FONT_PX = 15
  * matching canvas pixels underneath as a block gets taller — visible as
  * doubled, ghosted text. Keeping unfocused text invisible sidesteps that
  * misalignment entirely rather than trying to make it pixel-perfect.
+ *
+ * The focused block deliberately does NOT bump its font size above its
+ * natural, true-to-source size either (an earlier version floored it at a
+ * fixed minimum) — `TextEditDialog` now sizes the whole page by width
+ * rather than height, which makes the natural size comfortable to read and
+ * type into on its own, so editing no longer needs a jarring "pop bigger"
+ * moment on top of the existing pop-opaque/pop-to-front treatment.
  */
 export function TextEditOverlay({
   blocks,
@@ -65,9 +62,8 @@ export function TextEditOverlay({
         const top = Math.min(y1, y2) * displayScale
         const width = Math.abs(x2 - x1) * displayScale
         const height = Math.abs(y2 - y1) * displayScale
-        const naturalFontSize = block.fontSize * viewport.scale * displayScale
+        const fontSize = block.fontSize * viewport.scale * displayScale
         const isFocused = focusedId === block.id
-        const fontSize = isFocused ? Math.max(naturalFontSize, MIN_EDIT_FONT_PX) : naturalFontSize
 
         return (
           <div
@@ -85,7 +81,7 @@ export function TextEditOverlay({
               width,
               minHeight: height,
               fontSize,
-              lineHeight: isFocused ? 1.3 : 1.15,
+              lineHeight: 1.2,
               zIndex: isFocused ? 10 : 0,
             }}
             className={`pointer-events-auto absolute px-0.5 whitespace-pre-wrap outline-none ${

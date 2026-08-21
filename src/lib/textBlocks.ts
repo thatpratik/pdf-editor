@@ -30,6 +30,16 @@ export interface TextBlock {
 const LINE_Y_EPSILON = 2
 const BLOCK_LINE_GAP_FACTOR = 1.6
 const BLOCK_LEFT_ALIGN_TOLERANCE = 12
+// Two lines only belong to the same wrapped paragraph if they're roughly the
+// same font size (a size change usually means a new heading/field, not a
+// continuation) and the previous line ran nearly all the way to the block's
+// established right margin — i.e. it looks like it was cut off by wrapping,
+// not a short, complete line on its own (a field label, a table row, a form
+// value). Without the second check, a stack of short same-font same-left
+// lines — extremely common in forms and reports — all get merged into one
+// giant block just because the gaps between them are small and uniform.
+const BLOCK_FONT_SIZE_TOLERANCE = 0.5
+const BLOCK_WRAP_FILL_TOLERANCE_FACTOR = 4
 
 interface PositionedItem {
   str: string
@@ -105,6 +115,10 @@ function groupIntoLines(items: PositionedItem[]): PositionedItem[][] {
 interface Block {
   lines: PositionedItem[][]
   boundingBox: PdfRect
+  /** Rightmost edge reached by any line in this block so far — the block's
+   *  apparent wrap margin, used to tell "this line was cut off by wrapping"
+   *  from "this line just ended because it's a short, complete line." */
+  maxLineRight: number
 }
 
 function groupIntoBlocks(lines: PositionedItem[][]): Block[] {
@@ -112,6 +126,7 @@ function groupIntoBlocks(lines: PositionedItem[][]): Block[] {
 
   for (const line of lines) {
     const lineLeft = Math.min(...line.map((item) => item.x))
+    const lineRight = Math.max(...line.map((item) => item.x + item.width))
     const lineFontSize = line[0].fontSize
     const lineTop = line[0].y + lineFontSize
     const lineBottom = line[0].y
@@ -121,20 +136,27 @@ function groupIntoBlocks(lines: PositionedItem[][]): Block[] {
     if (current) {
       const previousLine = current.lines[current.lines.length - 1]
       const previousLeft = Math.min(...previousLine.map((item) => item.x))
+      const previousRight = Math.max(...previousLine.map((item) => item.x + item.width))
+      const previousFontSize = previousLine[0].fontSize
       const previousBottom = previousLine[0].y
       const gap = previousBottom - lineTop
+      const previousLineWasWrapped =
+        previousRight >= current.maxLineRight - lineFontSize * BLOCK_WRAP_FILL_TOLERANCE_FACTOR
       const sameBlock =
         gap <= lineFontSize * BLOCK_LINE_GAP_FACTOR &&
-        Math.abs(previousLeft - lineLeft) <= BLOCK_LEFT_ALIGN_TOLERANCE
+        Math.abs(previousLeft - lineLeft) <= BLOCK_LEFT_ALIGN_TOLERANCE &&
+        Math.abs(previousFontSize - lineFontSize) <= BLOCK_FONT_SIZE_TOLERANCE &&
+        previousLineWasWrapped
 
       if (sameBlock) {
         current.lines.push(line)
         current.boundingBox = unionRect(current.boundingBox, lineRect)
+        current.maxLineRight = Math.max(current.maxLineRight, lineRight)
         continue
       }
     }
 
-    blocks.push({ lines: [line], boundingBox: lineRect })
+    blocks.push({ lines: [line], boundingBox: lineRect, maxLineRight: lineRight })
   }
 
   return blocks

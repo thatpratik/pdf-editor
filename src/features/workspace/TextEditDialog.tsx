@@ -10,10 +10,13 @@ import { Spinner } from './Spinner'
 import { TextEditOverlay } from './TextEditOverlay'
 
 /**
- * Scale (before device-pixel-ratio) used when rendering the page inside this
- * dialog — deliberately larger than `PagePreview`'s inline scale, since the
- * whole point of the dialog is giving text editing much more room than the
- * cramped, fixed-width sidebar panel it used to live in.
+ * Backing-store render scale (before device-pixel-ratio) for the canvas
+ * inside this dialog. This controls sharpness only, not the displayed
+ * size — the canvas's CSS `max-width` (see the canvas's className below)
+ * is what actually determines how big the page looks on screen, since a
+ * canvas's CSS size clamp divides back out any resolution increase here.
+ * Kept above 1 purely so the page stays crisp on high-DPI displays once
+ * scaled up to fill most of the dialog's width.
  */
 const DIALOG_SCALE = 2.2
 
@@ -129,7 +132,7 @@ export function TextEditDialog({
       onClick={closeAndCommitPending}
     >
       <div
-        className="flex max-h-full w-full max-w-5xl flex-col gap-3 rounded-xl bg-white p-4 shadow-2xl"
+        className="flex max-h-full w-full max-w-[95vw] flex-col gap-3 rounded-xl bg-white p-4 shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between">
@@ -164,9 +167,17 @@ export function TextEditDialog({
 
         <div className="relative flex flex-1 items-center justify-center overflow-auto rounded-lg border border-slate-200 bg-slate-100 p-4">
           <div className="relative inline-block">
+            {/* Sized by width only (no max-height): a canvas's CSS
+                max-height/max-width clamp the *displayed* size independent
+                of how high its backing-store resolution is rendered, so
+                capping height here would silently undo any attempt to make
+                text bigger. Letting width drive the size and scrolling
+                vertically (the frame below is `overflow-auto`) is what
+                makes the natural, un-enlarged text big enough to edit
+                without needing a separate "pop out bigger on focus" step. */}
             <canvas
               ref={canvasRef}
-              className="max-h-[78vh] max-w-[80vw] rounded bg-white object-contain shadow"
+              className="max-w-[88vw] rounded bg-white object-contain shadow"
             />
             {viewport && textBlocks && (
               <TextEditOverlay
