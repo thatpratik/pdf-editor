@@ -112,6 +112,13 @@ export function TextEditOverlay({
               fontSize,
               lineHeight: 1.2,
               zIndex: isFocused ? 10 : 0,
+              // A 2px white halo just outside the box, rather than widening
+              // the box itself (which would also widen where text wraps).
+              // The canvas underneath is a downscaled, anti-aliased raster —
+              // its painted glyph edges can bleed a fractional pixel or two
+              // past this box's exact bounds, otherwise peeking out from
+              // behind it as a thin line tracing the original text.
+              boxShadow: showOpaque ? '0 0 0 2px white' : undefined,
               ...cssFontStyle(block.fontFamilyHint),
             }}
             className={`pointer-events-auto absolute px-0.5 whitespace-pre-wrap outline-none ${

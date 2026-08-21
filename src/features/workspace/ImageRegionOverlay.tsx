@@ -60,6 +60,16 @@ interface DragState {
 /** Minimum box size, in on-screen pixels. */
 const MIN_BOX_SIZE = 16
 
+/**
+ * Extra margin, in on-screen pixels, added around the white rectangle that
+ * covers a region's vacated original spot. The occlusion is otherwise sized
+ * to exactly match the detected bounding box, but the canvas underneath is a
+ * downscaled, anti-aliased raster — its actual painted edges can bleed a
+ * fractional pixel or two past that box. Without this margin, that sliver
+ * peeks out from behind the occlusion as a thin line tracing the old shape.
+ */
+const OCCLUSION_BLEED_PX = 2
+
 function initialBox(region: ImageRegion, viewport: PageViewport): Box {
   const [x1, y1] = viewport.convertToViewportPoint(region.boundingBox.x, region.boundingBox.y)
   const [x2, y2] = viewport.convertToViewportPoint(
@@ -225,10 +235,10 @@ export function ImageRegionOverlay({
             {needsOcclusion && (
               <div
                 style={{
-                  left: original.left * displayScale,
-                  top: original.top * displayScale,
-                  width: original.width * displayScale,
-                  height: original.height * displayScale,
+                  left: original.left * displayScale - OCCLUSION_BLEED_PX,
+                  top: original.top * displayScale - OCCLUSION_BLEED_PX,
+                  width: original.width * displayScale + OCCLUSION_BLEED_PX * 2,
+                  height: original.height * displayScale + OCCLUSION_BLEED_PX * 2,
                 }}
                 className="absolute bg-white"
               />
