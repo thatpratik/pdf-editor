@@ -44,6 +44,27 @@ function boxToPdfRect(box: Box, viewport: PageViewport): PdfRect {
   }
 }
 
+/** Inverse of `boxToPdfRect`: converts a PDF-space rect into raw viewport units. */
+function pdfRectToBox(rect: PdfRect, viewport: PageViewport): Box {
+  const [x1, y1] = viewport.convertToViewportPoint(rect.x, rect.y)
+  const [x2, y2] = viewport.convertToViewportPoint(rect.x + rect.width, rect.y + rect.height)
+  return {
+    left: Math.min(x1, x2),
+    top: Math.min(y1, y2),
+    width: Math.abs(x2 - x1),
+    height: Math.abs(y2 - y1),
+  }
+}
+
+function sameRect(a: PdfRect, b: PdfRect, epsilon = 0.05): boolean {
+  return (
+    Math.abs(a.x - b.x) <= epsilon &&
+    Math.abs(a.y - b.y) <= epsilon &&
+    Math.abs(a.width - b.width) <= epsilon &&
+    Math.abs(a.height - b.height) <= epsilon
+  )
+}
+
 /**
  * Full-screen dialog for moving, resizing, and deleting existing images on a
  * page — the same "give this its own dialog rather than the cramped sidebar
@@ -61,6 +82,11 @@ export function ImageEditDialog({
   onClose,
 }: ImageEditDialogProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // Mirrors `canvasRef.current` in state purely so the JSX below can
+  // condition on it — reading a ref's `.current` during render (rather than
+  // in an effect or event handler) isn't safe, since it doesn't trigger a
+  // re-render when the ref is attached.
+  const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [viewport, setViewport] = useState<PageViewport | null>(null)
   const [displayScale, setDisplayScale] = useState(1)
@@ -141,6 +167,25 @@ export function ImageEditDialog({
     })
   }
 
+  // Seeds each region's starting box from this page's existing edits (if
+  // any), matched by `originalBoundingBox` the same way the reducer's
+  // upsert does — otherwise reopening this dialog after a prior move/resize
+  // would show the region back at its pristine, pre-edit position, and a
+  // deleted image would reappear as if it were never removed.
+  const initialBoxOverrides: Record<string, Box | 'deleted'> = {}
+  if (viewport && imageRegions) {
+    const imageEdits = page.edits.filter((edit): edit is ImageEdit => edit.type === 'image')
+    for (const region of imageRegions) {
+      const match = [...imageEdits]
+        .reverse()
+        .find((edit) => sameRect(edit.originalBoundingBox, region.boundingBox))
+      if (!match) continue
+      initialBoxOverrides[region.id] = match.newBoundingBox
+        ? pdfRectToBox(match.newBoundingBox, viewport)
+        : 'deleted'
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-6"
@@ -183,15 +228,24 @@ export function ImageEditDialog({
         <div className="relative flex flex-1 overflow-auto rounded-lg border border-ink/10 bg-sunken p-4">
           <div className="relative m-auto inline-block">
             <canvas
-              ref={canvasRef}
+              ref={(el) => {
+                canvasRef.current = el
+                setCanvasEl(el)
+              }}
               className="max-w-[88vw] rounded bg-surface object-contain shadow"
             />
             {status === 'ready' && <CornerMarks color="teal" />}
-            {viewport && imageRegions && (
+            {/* Gated on `status === 'ready'`, not just viewport/imageRegions
+                being loaded — the overlay snapshots each region's pixels
+                straight off the canvas on mount, which needs the canvas to
+                have actually finished rendering, not just been sized. */}
+            {status === 'ready' && viewport && imageRegions && canvasEl && (
               <ImageRegionOverlay
                 regions={imageRegions}
                 viewport={viewport}
+                canvas={canvasEl}
                 displayScale={displayScale}
+                initialBoxOverrides={initialBoxOverrides}
                 onCommit={handleCommitRegion}
               />
             )}

@@ -6,8 +6,17 @@ import type { ImageRegion } from '../../lib/imageRegions'
 interface ImageRegionOverlayProps {
   regions: ImageRegion[]
   viewport: PageViewport
+  /** The already-rendered page canvas, used to snapshot each region's current pixels for the live drag/resize preview. */
+  canvas: HTMLCanvasElement
   /** Backing-store-pixels-to-displayed-CSS-pixels ratio for the canvas underneath this overlay. */
   displayScale: number
+  /**
+   * Per-region starting state (keyed by region id), seeded from this page's
+   * already-committed edits — `'deleted'` if the region was removed, or a
+   * `Box` if it was moved/resized — so reopening this dialog reflects prior
+   * edits instead of the freshly re-detected, pristine original.
+   */
+  initialBoxOverrides: Record<string, Box | 'deleted'>
   /**
    * Called once a drag/resize gesture releases (with the region's final raw
    * viewport-space box) or a region is deleted (with `null`). Not called for
@@ -66,6 +75,34 @@ function initialBox(region: ImageRegion, viewport: PageViewport): Box {
 }
 
 /**
+ * Crops a region's pixels straight out of the already-rendered page canvas,
+ * as a data URL, for on-screen display only (not export — see
+ * `cropRegionToPng` in `imageRegions.ts` for the rotation-compensated bytes
+ * that actually get embedded). Screen-space and export-space differ here on
+ * purpose: this crop is drawn back onto the very same rotated canvas the
+ * pixels came from, so it must stay in that as-displayed orientation to
+ * match, rather than being counter-rotated the way the exported copy is.
+ */
+function captureRegionPreview(canvas: HTMLCanvasElement, box: Box): string {
+  const offscreen = document.createElement('canvas')
+  offscreen.width = Math.max(1, Math.round(box.width))
+  offscreen.height = Math.max(1, Math.round(box.height))
+  const ctx = offscreen.getContext('2d')
+  if (!ctx) return ''
+  ctx.drawImage(canvas, box.left, box.top, box.width, box.height, 0, 0, offscreen.width, offscreen.height)
+  return offscreen.toDataURL('image/png')
+}
+
+function sameBox(a: Box, b: Box, epsilon = 0.5): boolean {
+  return (
+    Math.abs(a.left - b.left) <= epsilon &&
+    Math.abs(a.top - b.top) <= epsilon &&
+    Math.abs(a.width - b.width) <= epsilon &&
+    Math.abs(a.height - b.height) <= epsilon
+  )
+}
+
+/**
  * Draggable/resizable/deletable bounding-box overlay over each detected
  * image on the page, layered atop the already-rendered canvas the same way
  * `TextEditOverlay` is. Box geometry lives in local component state (in raw
@@ -76,10 +113,34 @@ function initialBox(region: ImageRegion, viewport: PageViewport): Box {
  * into `PdfRect` coordinates and extracts the image's pixels before
  * dispatching `APPLY_IMAGE_EDIT`).
  */
-export function ImageRegionOverlay({ regions, viewport, displayScale, onCommit }: ImageRegionOverlayProps) {
+export function ImageRegionOverlay({
+  regions,
+  viewport,
+  canvas,
+  displayScale,
+  initialBoxOverrides,
+  onCommit,
+}: ImageRegionOverlayProps) {
   const [boxes, setBoxes] = useState<Record<string, RegionBoxState>>(() =>
     Object.fromEntries(
-      regions.map((region) => [region.id, { ...initialBox(region, viewport), deleted: false }]),
+      regions.map((region) => {
+        const override = initialBoxOverrides[region.id]
+        if (override === 'deleted') {
+          return [region.id, { left: 0, top: 0, width: 0, height: 0, deleted: true }]
+        }
+        return [region.id, { ...(override ?? initialBox(region, viewport)), deleted: false }]
+      }),
+    ),
+  )
+  // Captured once per region, from its true original spot on the canvas —
+  // not the (possibly already-moved) current box — since that original spot
+  // is the only place real pixels exist to crop; the captured image is then
+  // displayed at whatever box position/size is current, including live
+  // while dragging/resizing, so a move or resize shows the actual picture
+  // moving instead of an empty dashed outline.
+  const [previewSrcByRegionId] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      regions.map((region) => [region.id, captureRegionPreview(canvas, initialBox(region, viewport))]),
     ),
   )
   const dragRef = useRef<DragState | null>(null)
@@ -148,40 +209,69 @@ export function ImageRegionOverlay({ regions, viewport, displayScale, onCommit }
     <div className="pointer-events-none absolute inset-0">
       {regions.map((region, index) => {
         const box = boxes[region.id]
-        if (!box || box.deleted) return null
+        if (!box) return null
+
+        // The underlying canvas always shows this region's original pixels
+        // at its true original spot, since nothing ever redraws it live —
+        // so once the current box has moved/resized away from that spot (or
+        // the region was deleted), the original spot needs covering, or the
+        // untouched original would show through right next to (or behind)
+        // the moved copy.
+        const original = initialBox(region, viewport)
+        const needsOcclusion = box.deleted || !sameBox(box, original)
 
         return (
-          <div
-            key={region.id}
-            onPointerDown={beginDrag(region.id, 'move')}
-            onPointerMove={handlePointerMove}
-            onPointerUp={endDrag}
-            style={{
-              left: box.left * displayScale,
-              top: box.top * displayScale,
-              width: box.width * displayScale,
-              height: box.height * displayScale,
-            }}
-            className="group pointer-events-auto absolute cursor-move touch-none border-2 border-dashed border-teal bg-teal/10"
-          >
-            <span className="pointer-events-none absolute -top-5 left-0 rounded bg-teal-fill px-1 font-mono text-[10px] font-medium text-white">
-              Image {index + 1}
-            </span>
-            <button
-              type="button"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={() => handleDelete(region.id)}
-              aria-label={`Delete image ${index + 1}`}
-              className="absolute -top-5 right-0 flex h-4 w-4 items-center justify-center rounded bg-danger-fill text-[10px] leading-none font-bold text-white opacity-0 group-hover:opacity-100"
-            >
-              ×
-            </button>
-            <div
-              onPointerDown={beginDrag(region.id, 'resize')}
-              onPointerMove={handlePointerMove}
-              onPointerUp={endDrag}
-              className="absolute -right-1.5 -bottom-1.5 h-3 w-3 cursor-se-resize touch-none rounded-full border border-surface bg-teal-fill"
-            />
+          <div key={region.id}>
+            {needsOcclusion && (
+              <div
+                style={{
+                  left: original.left * displayScale,
+                  top: original.top * displayScale,
+                  width: original.width * displayScale,
+                  height: original.height * displayScale,
+                }}
+                className="absolute bg-white"
+              />
+            )}
+            {!box.deleted && (
+              <div
+                onPointerDown={beginDrag(region.id, 'move')}
+                onPointerMove={handlePointerMove}
+                onPointerUp={endDrag}
+                style={{
+                  left: box.left * displayScale,
+                  top: box.top * displayScale,
+                  width: box.width * displayScale,
+                  height: box.height * displayScale,
+                }}
+                className="group pointer-events-auto absolute cursor-move touch-none border-2 border-dashed border-teal"
+              >
+                <img
+                  src={previewSrcByRegionId[region.id]}
+                  alt=""
+                  draggable={false}
+                  className="pointer-events-none h-full w-full object-fill"
+                />
+                <span className="pointer-events-none absolute -top-5 left-0 rounded bg-teal-fill px-1 font-mono text-[10px] font-medium text-white">
+                  Image {index + 1}
+                </span>
+                <button
+                  type="button"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={() => handleDelete(region.id)}
+                  aria-label={`Delete image ${index + 1}`}
+                  className="absolute -top-5 right-0 flex h-4 w-4 items-center justify-center rounded bg-danger-fill text-[10px] leading-none font-bold text-white opacity-0 group-hover:opacity-100"
+                >
+                  ×
+                </button>
+                <div
+                  onPointerDown={beginDrag(region.id, 'resize')}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={endDrag}
+                  className="absolute -right-1.5 -bottom-1.5 h-3 w-3 cursor-se-resize touch-none rounded-full border border-surface bg-teal-fill"
+                />
+              </div>
+            )}
           </div>
         )
       })}

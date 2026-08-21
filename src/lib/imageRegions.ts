@@ -93,12 +93,24 @@ export async function cropRegionToPng(
   const width = Math.abs(x2 - x1)
   const height = Math.abs(y2 - y1)
 
+  // `canvas` was rendered with `viewport.rotation` baked in for display, but
+  // pdf-lib draws a new image into the page's own unrotated content-stream
+  // space — the exported page's /Rotate entry re-applies that same rotation
+  // again when viewed. Left uncorrected, an edited image would end up
+  // rotated twice. Counter-rotating the cropped pixels back to the page's
+  // native (unrotated) orientation here cancels that out, so the two
+  // rotations combine back to the single one the user actually saw.
+  const rotation = ((viewport.rotation % 360) + 360) % 360
+  const swapped = rotation === 90 || rotation === 270
   const offscreen = document.createElement('canvas')
-  offscreen.width = Math.max(1, Math.round(width))
-  offscreen.height = Math.max(1, Math.round(height))
+  offscreen.width = Math.max(1, Math.round(swapped ? height : width))
+  offscreen.height = Math.max(1, Math.round(swapped ? width : height))
   const ctx = offscreen.getContext('2d')
   if (!ctx) throw new Error('2D canvas context unavailable')
-  ctx.drawImage(canvas, left, top, width, height, 0, 0, offscreen.width, offscreen.height)
+
+  ctx.translate(offscreen.width / 2, offscreen.height / 2)
+  ctx.rotate((-rotation * Math.PI) / 180)
+  ctx.drawImage(canvas, left, top, width, height, -width / 2, -height / 2, width, height)
 
   const blob = await new Promise<Blob | null>((resolve) => offscreen.toBlob(resolve, 'image/png'))
   if (!blob) throw new Error('Failed to encode cropped image region')

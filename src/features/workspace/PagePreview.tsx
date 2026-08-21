@@ -70,10 +70,10 @@ export function PagePreview({
     setIsEditingText(true)
   }
 
-  // const handleOpenImageEdit = () => {
-  //   setIsEditingText(false)
-  //   setIsEditingImages(true)
-  // }
+  const handleOpenImageEdit = () => {
+    setIsEditingText(false)
+    setIsEditingImages(true)
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -87,14 +87,14 @@ export function PagePreview({
           </h2>
         </div>
         <div className="flex items-center gap-1">
-          {/* <button
+          <button
             type="button"
             onClick={handleOpenImageEdit}
             disabled={status !== 'ready'}
             className="rounded-md px-2 py-1 text-xs font-medium text-teal hover:bg-teal/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal disabled:cursor-not-allowed disabled:text-ink/25 disabled:hover:bg-transparent"
           >
             Edit images
-          </button> */}
+          </button>
           <button
             type="button"
             onClick={handleOpenTextEdit}
