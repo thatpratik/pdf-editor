@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import type { PDFDocumentProxy } from '../../lib/pdf'
 import { renderPageToCanvas } from '../../lib/pdf'
 import type { PageEdit, WorkingPage } from './types'
-import { Spinner } from './Spinner'
 import { TextEditDialog } from './TextEditDialog'
 import { ImageEditDialog } from './ImageEditDialog'
 import { CornerMarks } from './CornerMarks'
+import { ScanBar } from './ScanBar'
 
 /** Scale (before device-pixel-ratio) used for the larger single-page preview. */
 const PREVIEW_SCALE = 1.4
@@ -98,16 +98,16 @@ export function PagePreview({
         </div>
       </div>
 
-      <div className="relative flex min-h-96 items-center justify-center rounded-lg border border-ink/10 bg-white p-3 shadow-sm">
+      <div className="relative flex min-h-96 items-center justify-center rounded-lg border border-ink/10 bg-surface p-3 shadow-sm">
         <canvas ref={canvasRef} className="max-h-[75vh] max-w-full rounded object-contain" />
         {status === 'ready' && <CornerMarks />}
         {status === 'loading' && (
-          <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-white/70">
-            <Spinner />
+          <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-surface/80">
+            <ScanBar />
           </div>
         )}
         {status === 'error' && (
-          <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-white/90 px-6 text-center text-sm text-danger">
+          <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-surface/90 px-6 text-center text-sm text-danger">
             Couldn&apos;t render this page.
           </div>
         )}

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import type { DragEvent, KeyboardEvent } from 'react'
+import { CornerMarks } from './CornerMarks'
 
 interface UploadDropzoneProps {
   onFilesSelected: (files: File[]) => void
@@ -32,8 +33,8 @@ export function UploadDropzone({ onFilesSelected }: UploadDropzoneProps) {
   return (
     <div className="relative flex h-full items-center justify-center overflow-hidden p-8">
       <div className="relative flex min-w-0 w-full max-w-xl flex-col items-center text-center">
-        <h2 className="font-display text-4xl italic tracking-tight text-ink">
-          Merge, split, reorder, and edit PDFs
+        <h2 className="font-display text-3xl font-semibold tracking-[0.04em] text-ink uppercase md:text-4xl">
+          Merge, split, reorder, edit
         </h2>
         <p className="mt-2 max-w-md text-base text-ink/60">
           Everything happens right here in your browser — your files are never uploaded
@@ -51,12 +52,13 @@ export function UploadDropzone({ onFilesSelected }: UploadDropzoneProps) {
           }}
           onDragLeave={() => setIsDragActive(false)}
           onDrop={handleDrop}
-          className={`mt-8 flex w-full cursor-pointer flex-col items-center gap-4 rounded-xl border-2 border-dashed px-10 py-14 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${
+          className={`lock-on relative mt-8 flex w-full cursor-pointer flex-col items-center gap-4 rounded-xl border-2 border-dashed px-10 py-14 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${
             isDragActive
-              ? 'scale-[1.01] border-accent bg-accent/5 shadow-lg shadow-accent/10'
-              : 'border-ink/20 bg-white shadow-sm hover:border-accent/40 hover:bg-accent/[0.03]'
+              ? 'scale-[1.01] border-accent bg-accent/5 shadow-[0_0_0_1px_var(--color-accent),0_0_32px_-8px_var(--color-accent)]'
+              : 'border-ink/20 bg-surface shadow-sm hover:border-accent/40 hover:bg-accent/[0.03]'
           }`}
         >
+          {isDragActive && <CornerMarks />}
           <div
             className={`flex h-14 w-14 items-center justify-center rounded-full transition-colors duration-200 ${
               isDragActive ? 'bg-accent/15' : 'bg-accent/8'

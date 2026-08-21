@@ -164,7 +164,7 @@ export function ImageRegionOverlay({ regions, viewport, displayScale, onCommit }
             }}
             className="group pointer-events-auto absolute cursor-move touch-none border-2 border-dashed border-teal bg-teal/10"
           >
-            <span className="pointer-events-none absolute -top-5 left-0 rounded bg-teal px-1 font-mono text-[10px] font-medium text-white">
+            <span className="pointer-events-none absolute -top-5 left-0 rounded bg-teal-fill px-1 font-mono text-[10px] font-medium text-white">
               Image {index + 1}
             </span>
             <button
@@ -172,7 +172,7 @@ export function ImageRegionOverlay({ regions, viewport, displayScale, onCommit }
               onPointerDown={(event) => event.stopPropagation()}
               onClick={() => handleDelete(region.id)}
               aria-label={`Delete image ${index + 1}`}
-              className="absolute -top-5 right-0 flex h-4 w-4 items-center justify-center rounded bg-danger text-[10px] leading-none font-bold text-white opacity-0 group-hover:opacity-100"
+              className="absolute -top-5 right-0 flex h-4 w-4 items-center justify-center rounded bg-danger-fill text-[10px] leading-none font-bold text-white opacity-0 group-hover:opacity-100"
             >
               ×
             </button>
@@ -180,7 +180,7 @@ export function ImageRegionOverlay({ regions, viewport, displayScale, onCommit }
               onPointerDown={beginDrag(region.id, 'resize')}
               onPointerMove={handlePointerMove}
               onPointerUp={endDrag}
-              className="absolute -right-1.5 -bottom-1.5 h-3 w-3 cursor-se-resize touch-none rounded-full border border-white bg-teal"
+              className="absolute -right-1.5 -bottom-1.5 h-3 w-3 cursor-se-resize touch-none rounded-full border border-surface bg-teal-fill"
             />
           </div>
         )

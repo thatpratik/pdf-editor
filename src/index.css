@@ -1,22 +1,140 @@
 @import 'tailwindcss';
 
-@theme {
-  --color-paper: #faf9f6;
-  --color-ink: #18181b;
-  --color-accent: #3730a5;
-  --color-accent-hover: #2e2789;
-  --color-teal: #0f766e;
-  --color-teal-hover: #0c5f59;
-  --color-danger: #b3261e;
-  --color-danger-hover: #952019;
+:root {
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --surface-sunken: #eaedf5;
+  --ink: #0b0e14;
+  --line: #dce1ec;
+  --scrim: rgb(8 10 16 / 60%);
 
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --font-display: 'Instrument Serif', ui-serif, Georgia, serif;
+  --accent: #4f46e5;
+  --accent-fill: #4f46e5;
+  --accent-hover: #4338ca;
+
+  --teal: #0e7490;
+  --teal-fill: #0e7490;
+  --teal-hover: #0b5b73;
+
+  --danger: #dc2626;
+  --danger-fill: #dc2626;
+  --danger-hover: #b91c1c;
+
+  --warn-bg: #fef3e2;
+  --warn-border: #fde3a7;
+  --warn-text: #7c4a03;
+}
+
+:root[data-theme='dark'] {
+  --bg: #0a0d14;
+  --surface: #12151f;
+  --surface-sunken: #191d29;
+  --ink: #e8eaf3;
+  --line: #242a38;
+  --scrim: rgb(0 0 0 / 75%);
+
+  --accent: #9b8cfb;
+  --accent-fill: #6c5ce7;
+  --accent-hover: #7c6cf2;
+
+  --teal: #22d3ee;
+  --teal-fill: #0e7490;
+  --teal-hover: #0b5b73;
+
+  --danger: #fb7185;
+  --danger-fill: #dc2626;
+  --danger-hover: #c4211f;
+
+  --warn-bg: rgb(217 164 6 / 12%);
+  --warn-border: rgb(217 164 6 / 35%);
+  --warn-text: #f3c766;
+}
+
+@theme {
+  --color-paper: var(--bg);
+  --color-surface: var(--surface);
+  --color-sunken: var(--surface-sunken);
+  --color-ink: var(--ink);
+  --color-line: var(--line);
+  --color-scrim: var(--scrim);
+
+  --color-accent: var(--accent);
+  --color-accent-fill: var(--accent-fill);
+  --color-accent-hover: var(--accent-hover);
+
+  --color-teal: var(--teal);
+  --color-teal-fill: var(--teal-fill);
+  --color-teal-hover: var(--teal-hover);
+
+  --color-danger: var(--danger);
+  --color-danger-fill: var(--danger-fill);
+  --color-danger-hover: var(--danger-hover);
+
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-border: var(--warn-border);
+  --color-warn: var(--warn-text);
+
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Chakra Petch', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
 }
 
 @layer base {
   body {
     @apply bg-paper font-sans text-ink;
+    color-scheme: light;
+  }
+  :root[data-theme='dark'] body {
+    color-scheme: dark;
+  }
+}
+
+/* Signature motion: a viewfinder "lock-on" for the active page frame, and a
+   scanner sweep for canvas renders in flight — both grounded in what this
+   app actually does (framing/scanning a document page), not decoration. */
+@keyframes lock-on {
+  0% {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes scan-sweep {
+  0%,
+  100% {
+    transform: translateY(-110%);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(110%);
+  }
+}
+
+.lock-on {
+  animation: lock-on 320ms ease-out both;
+}
+
+.scan-bar {
+  animation: scan-sweep 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lock-on {
+    animation: none;
+  }
+  .scan-bar {
+    animation: none;
+    opacity: 0.9;
+    transform: translateY(0);
   }
 }

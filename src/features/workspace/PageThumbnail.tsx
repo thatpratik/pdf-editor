@@ -20,6 +20,8 @@ interface PageThumbnailProps {
   onToggleExtract: (pageId: string) => void
   isSplitAfter: boolean
   onToggleSplitAfter: (pageId: string) => void
+  /** The last page in the working set has nothing after it to split into a new file. */
+  isLastPage: boolean
 }
 
 /**
@@ -38,6 +40,7 @@ export function PageThumbnail({
   onToggleExtract,
   isSplitAfter,
   onToggleSplitAfter,
+  isLastPage,
 }: PageThumbnailProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -66,7 +69,7 @@ export function PageThumbnail({
       className={`relative flex flex-col items-center gap-1.5 rounded-lg border p-2 transition ${
         isSelected
           ? 'border-accent bg-accent/6'
-          : 'border-ink/10 bg-white hover:border-ink/20 hover:bg-ink/[0.02]'
+          : 'border-ink/10 bg-surface hover:border-ink/20 hover:bg-ink/[0.02]'
       } ${isDragging ? 'z-10 opacity-70' : ''}`}
     >
       <button
@@ -131,7 +134,7 @@ export function PageThumbnail({
         </button>
       </div>
 
-      <label className="absolute bottom-1.5 left-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white/85 hover:bg-white">
+      <label className="absolute bottom-1.5 left-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-surface/85 hover:bg-surface">
         <input
           type="checkbox"
           checked={isSelectedForExtract}
@@ -141,31 +144,33 @@ export function PageThumbnail({
         />
       </label>
 
-      <button
-        type="button"
-        onClick={() => onToggleSplitAfter(page.id)}
-        aria-pressed={isSplitAfter}
-        aria-label="Split into a new file after this page"
-        title="Split into a new file after this page"
-        className={`absolute right-1.5 bottom-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-          isSplitAfter
-            ? 'bg-accent text-white hover:bg-accent-hover'
-            : 'bg-white/85 text-ink/40 hover:bg-white hover:text-ink/70'
-        }`}
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          className="h-4 w-4"
-          aria-hidden="true"
+      {!isLastPage && (
+        <button
+          type="button"
+          onClick={() => onToggleSplitAfter(page.id)}
+          aria-pressed={isSplitAfter}
+          aria-label="Split into a new file after this page"
+          title="Split into a new file after this page"
+          className={`absolute right-1.5 bottom-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+            isSplitAfter
+              ? 'bg-accent-fill text-white hover:bg-accent-hover'
+              : 'bg-surface/85 text-ink/40 hover:bg-surface hover:text-ink/70'
+          }`}
         >
-          <circle cx="6" cy="6" r="2" />
-          <circle cx="6" cy="18" r="2" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 7.5 20 20M7.5 16.5 20 4" />
-        </svg>
-      </button>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            className="h-4 w-4"
+            aria-hidden="true"
+          >
+            <circle cx="6" cy="6" r="2" />
+            <circle cx="6" cy="18" r="2" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 7.5 20 20M7.5 16.5 20 4" />
+          </svg>
+        </button>
+      )}
 
       <button
         type="button"
@@ -173,7 +178,7 @@ export function PageThumbnail({
         aria-current={isSelected}
         className="flex w-full flex-col items-center gap-1.5"
       >
-        <div className="relative flex h-36 w-full items-center justify-center overflow-hidden rounded-md bg-ink/5">
+        <div className="relative flex h-36 w-full items-center justify-center overflow-hidden rounded-md bg-sunken">
           <canvas ref={canvasRef} className="max-h-full max-w-full object-contain" />
           {status === 'loading' && (
             <div className="absolute inset-0 flex items-center justify-center">

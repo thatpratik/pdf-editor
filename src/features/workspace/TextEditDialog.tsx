@@ -6,9 +6,9 @@ import { getTextBlocks } from '../../lib/textBlocks'
 import type { TextBlock } from '../../lib/textBlocks'
 import { matchStandardFont } from '../../lib/pdfExport'
 import type { PageEdit, WorkingPage } from './types'
-import { Spinner } from './Spinner'
 import { TextEditOverlay } from './TextEditOverlay'
 import { CornerMarks } from './CornerMarks'
+import { ScanBar } from './ScanBar'
 
 /**
  * Backing-store render scale (before device-pixel-ratio) for the canvas
@@ -129,11 +129,11 @@ export function TextEditDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-6"
       onClick={closeAndCommitPending}
     >
       <div
-        className="flex max-h-full w-full max-w-[95vw] flex-col gap-3 rounded-xl bg-white p-4 shadow-2xl"
+        className="flex max-h-full w-full max-w-[95vw] flex-col gap-3 rounded-xl bg-surface p-4 shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between">
@@ -143,14 +143,14 @@ export function TextEditDialog({
           <button
             type="button"
             onClick={closeAndCommitPending}
-            className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="rounded-md bg-accent-fill px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             Done editing
           </button>
         </div>
 
         {!hasSeenEditCaveat && (
-          <div className="flex items-start justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <div className="flex items-start justify-between gap-3 rounded-md border border-warn-border bg-warn-bg px-3 py-2 text-xs text-warn">
             <span>
               Edited or covered text isn&apos;t fully removed from the file — it&apos;s visually
               replaced, but the original content can still be recovered by inspecting the PDF
@@ -166,7 +166,7 @@ export function TextEditDialog({
           </div>
         )}
 
-        <div className="relative flex flex-1 items-center justify-center overflow-auto rounded-lg border border-ink/10 bg-ink/5 p-4">
+        <div className="relative flex flex-1 items-center justify-center overflow-auto rounded-lg border border-ink/10 bg-sunken p-4">
           <div className="relative inline-block">
             {/* Sized by width only (no max-height): a canvas's CSS
                 max-height/max-width clamp the *displayed* size independent
@@ -178,7 +178,7 @@ export function TextEditDialog({
                 without needing a separate "pop out bigger on focus" step. */}
             <canvas
               ref={canvasRef}
-              className="max-w-[88vw] rounded bg-white object-contain shadow"
+              className="max-w-[88vw] rounded bg-surface object-contain shadow"
             />
             {status === 'ready' && <CornerMarks />}
             {viewport && textBlocks && (
@@ -191,12 +191,12 @@ export function TextEditDialog({
             )}
           </div>
           {status === 'loading' && (
-            <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-white/70">
-              <Spinner />
+            <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-surface/80">
+              <ScanBar />
             </div>
           )}
           {status === 'error' && (
-            <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-white/90 px-6 text-center text-sm text-danger">
+            <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-surface/90 px-6 text-center text-sm text-danger">
               Couldn&apos;t render this page.
             </div>
           )}

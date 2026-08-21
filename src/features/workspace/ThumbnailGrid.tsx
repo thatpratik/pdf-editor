@@ -62,7 +62,7 @@ export function ThumbnailGrid({
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={pages.map((page) => page.id)} strategy={rectSortingStrategy}>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
-          {pages.map((page) => {
+          {pages.map((page, index) => {
             const doc = docsBySourceFileId.get(page.sourceFileId)
             if (!doc) return null
             return (
@@ -78,6 +78,7 @@ export function ThumbnailGrid({
                 onToggleExtract={onToggleExtract}
                 isSplitAfter={splitAfterPageIds.has(page.id)}
                 onToggleSplitAfter={onToggleSplitAfter}
+                isLastPage={index === pages.length - 1}
               />
             )
           })}

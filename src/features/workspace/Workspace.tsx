@@ -9,6 +9,8 @@ import { UploadDropzone } from './UploadDropzone'
 import { ThumbnailGrid } from './ThumbnailGrid'
 import { PagePreview } from './PagePreview'
 import { Spinner } from './Spinner'
+import { ThemeToggle } from './ThemeToggle'
+import { ConfirmDialog } from './ConfirmDialog'
 
 type UploadStatus = 'idle' | 'loading' | 'error'
 
@@ -52,6 +54,7 @@ function WorkspaceScreen() {
   // between TextEditDialog and ImageEditDialog, since it's the same
   // underlying limitation either way.
   const [hasSeenEditCaveat, setHasSeenEditCaveat] = useState(false)
+  const [isConfirmingClearAll, setIsConfirmingClearAll] = useState(false)
 
   const addMoreInputRef = useRef<HTMLInputElement>(null)
 
@@ -106,10 +109,7 @@ function WorkspaceScreen() {
     [dispatch],
   )
 
-  const handleClearAll = useCallback(() => {
-    if (pages.length > 0 && !window.confirm('Clear all files and pages? This can’t be undone.')) {
-      return
-    }
+  const performClearAll = useCallback(() => {
     sourceFiles.forEach((sourceFile) => sourceFile.doc.destroy())
     dispatch({ type: 'RESET' })
     setSelectedPageId(null)
@@ -117,7 +117,16 @@ function WorkspaceScreen() {
     setSplitAfterPageIds(new Set())
     setUploadStatus('idle')
     setUploadError(null)
-  }, [dispatch, pages.length, sourceFiles])
+    setIsConfirmingClearAll(false)
+  }, [dispatch, sourceFiles])
+
+  const handleClearAll = useCallback(() => {
+    if (pages.length > 0) {
+      setIsConfirmingClearAll(true)
+      return
+    }
+    performClearAll()
+  }, [pages.length, performClearAll])
 
   const handleRotatePage = useCallback(
     (pageId: string) => {
@@ -142,9 +151,15 @@ function WorkspaceScreen() {
         return next
       })
       setSplitAfterPageIds((current) => {
-        if (!current.has(pageId)) return current
+        const remaining = pages.filter((page) => page.id !== pageId)
+        const newLastPageId = remaining[remaining.length - 1]?.id
+        // Drop the deleted page's own mark, and drop a mark on whichever
+        // page now becomes the last one — splitting after the last page is
+        // meaningless (there'd be nothing left to split into a new file).
+        if (!current.has(pageId) && !(newLastPageId && current.has(newLastPageId))) return current
         const next = new Set(current)
         next.delete(pageId)
+        if (newLastPageId) next.delete(newLastPageId)
         return next
       })
     },
@@ -222,6 +237,11 @@ function WorkspaceScreen() {
     }
   }, [sourceFiles, pages])
 
+  // Computed from the actual partition rather than `splitAfterPageIds.size + 1`
+  // so the label can never overstate the file count (e.g. a stray mark on
+  // what's now the last page splits into nothing extra).
+  const splitFileCount = splitAfterPageIds.size > 0 ? splitIntoRanges(pages, splitAfterPageIds).length : 0
+
   const docsBySourceFileId = new Map(
     sourceFiles.map((sourceFile) => [sourceFile.id, sourceFile.doc]),
   )
@@ -233,7 +253,7 @@ function WorkspaceScreen() {
 
   return (
     <div className="flex h-screen flex-col bg-paper">
-      <header className="flex shrink-0 items-center justify-between border-b border-ink/10 bg-white px-6 py-3">
+      <header className="flex shrink-0 items-center justify-between border-b border-ink/10 bg-surface px-6 py-3">
         <div className="flex items-center gap-2.5">
           <img src="/favicon.svg" alt="" aria-hidden="true" className="h-6 w-6" />
           <div>
@@ -285,21 +305,21 @@ function WorkspaceScreen() {
                     : `Extract selected (${selectedForExtractIds.size})`}
                 </button>
               )}
-              {splitAfterPageIds.size > 0 && (
+              {splitFileCount > 1 && (
                 <button
                   type="button"
                   onClick={handleSplit}
                   disabled={isSplitting}
                   className="rounded-md border border-accent/40 px-3.5 py-2 text-sm font-medium text-accent hover:bg-accent/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:border-ink/15 disabled:text-ink/30 disabled:hover:bg-transparent"
                 >
-                  {isSplitting ? 'Splitting…' : `Split into ${splitAfterPageIds.size + 1} files`}
+                  {isSplitting ? 'Splitting…' : `Split into ${splitFileCount} files`}
                 </button>
               )}
               <button
                 type="button"
                 onClick={handleDownload}
                 disabled={isExporting}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-accent/40"
+                className="rounded-md bg-accent-fill px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-accent-fill/40"
               >
                 {isExporting ? 'Building…' : 'Download'}
               </button>
@@ -334,6 +354,7 @@ function WorkspaceScreen() {
               </div>
             </>
           )}
+          <ThemeToggle />
         </div>
       </header>
 
@@ -388,7 +409,7 @@ function WorkspaceScreen() {
               <button
                 type="button"
                 onClick={() => setUploadStatus('idle')}
-                className="mt-6 rounded-md bg-danger px-4 py-2 text-sm font-medium text-white hover:bg-danger-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-visible:ring-offset-2"
+                className="mt-6 rounded-md bg-danger-fill px-4 py-2 text-sm font-medium text-white hover:bg-danger-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger focus-visible:ring-offset-2"
               >
                 Try another file
               </button>
@@ -415,7 +436,7 @@ function WorkspaceScreen() {
                 onToggleSplitAfter={handleToggleSplitAfter}
               />
             </div>
-            <aside className="w-[26rem] shrink-0 overflow-y-auto border-l border-ink/10 bg-white p-6">
+            <aside className="w-[26rem] shrink-0 overflow-y-auto border-l border-ink/10 bg-surface p-6">
               {selectedPage && selectedDoc && (
                 <PagePreview
                   doc={selectedDoc}
@@ -436,6 +457,17 @@ function WorkspaceScreen() {
           </div>
         )}
       </main>
+
+      {isConfirmingClearAll && (
+        <ConfirmDialog
+          title="Clear all files and pages?"
+          description="This removes everything from the workspace. It can't be undone."
+          confirmLabel="Clear all"
+          danger
+          onConfirm={performClearAll}
+          onCancel={() => setIsConfirmingClearAll(false)}
+        />
+      )}
     </div>
   )
 }
