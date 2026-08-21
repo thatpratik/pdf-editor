@@ -70,10 +70,10 @@ export function PagePreview({
     setIsEditingText(true)
   }
 
-  const handleOpenImageEdit = () => {
-    setIsEditingText(false)
-    setIsEditingImages(true)
-  }
+  // const handleOpenImageEdit = () => {
+  //   setIsEditingText(false)
+  //   setIsEditingImages(true)
+  // }
 
   return (
     <div className="flex flex-col gap-3">
