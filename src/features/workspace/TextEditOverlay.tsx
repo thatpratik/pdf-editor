@@ -7,7 +7,29 @@ interface TextEditOverlayProps {
   viewport: PageViewport
   /** Backing-store-pixels-to-displayed-CSS-pixels ratio for the canvas underneath this overlay. */
   displayScale: number
+  /** Blocks with a committed edit (this session or a prior one), keyed by block id — these render their edited text opaquely at all times, not just while focused, so a commit doesn't appear to silently revert to the original text once the box loses focus. */
+  editedTextByBlockId: Record<string, string>
   onCommit: (block: TextBlock, newText: string) => void
+}
+
+/**
+ * Approximates pdf.js's font-family hint as a CSS font stack/weight/style —
+ * mirrors the same serif/bold/italic detection `matchStandardFont` in
+ * pdfExport.ts uses to pick a pdf-lib standard font, so the on-screen editor
+ * wraps text roughly the same way the exported PDF will, instead of
+ * reflowing against a generic browser default font with different metrics.
+ */
+function cssFontStyle(fontFamilyHint: string): { fontFamily: string; fontWeight: number; fontStyle: string } {
+  const hint = fontFamilyHint.toLowerCase()
+  const isBold = hint.includes('bold')
+  const isItalic = hint.includes('italic') || hint.includes('oblique')
+  const isSerif = /times|serif|georgia|garamond|cambria|minion/.test(hint) && !hint.includes('sans')
+
+  return {
+    fontFamily: isSerif ? '"Times New Roman", Times, serif' : 'Helvetica, Arial, sans-serif',
+    fontWeight: isBold ? 700 : 400,
+    fontStyle: isItalic ? 'italic' : 'normal',
+  }
 }
 
 /**
@@ -46,6 +68,7 @@ export function TextEditOverlay({
   blocks,
   viewport,
   displayScale,
+  editedTextByBlockId,
   onCommit,
 }: TextEditOverlayProps) {
   const [focusedId, setFocusedId] = useState<string | null>(null)
@@ -64,6 +87,12 @@ export function TextEditOverlay({
         const height = Math.abs(y2 - y1) * displayScale
         const fontSize = block.fontSize * viewport.scale * displayScale
         const isFocused = focusedId === block.id
+        const isEdited = block.id in editedTextByBlockId
+        // A block with a committed edit stays visible (opaque) even once it
+        // loses focus — otherwise the box goes back to fully transparent and
+        // the untouched canvas underneath shows through, which looks exactly
+        // like the edit silently reverted to the original text.
+        const showOpaque = isFocused || isEdited
 
         return (
           <div
@@ -83,14 +112,15 @@ export function TextEditOverlay({
               fontSize,
               lineHeight: 1.2,
               zIndex: isFocused ? 10 : 0,
+              ...cssFontStyle(block.fontFamilyHint),
             }}
             className={`pointer-events-auto absolute px-0.5 whitespace-pre-wrap outline-none ${
-              isFocused
-                ? 'overflow-visible border border-dashed border-accent bg-surface text-ink shadow-lg'
+              showOpaque
+                ? `overflow-visible bg-white text-black ${isFocused ? 'border border-dashed border-accent' : 'border border-transparent'}`
                 : 'overflow-hidden border border-transparent text-transparent hover:border-dashed hover:border-accent/40 hover:bg-accent/5'
             }`}
           >
-            {block.text}
+            {editedTextByBlockId[block.id] ?? block.text}
           </div>
         )
       })}

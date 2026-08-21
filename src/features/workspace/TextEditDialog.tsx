@@ -5,7 +5,7 @@ import { getPageViewport, renderPageToCanvas } from '../../lib/pdf'
 import { getTextBlocks } from '../../lib/textBlocks'
 import type { TextBlock } from '../../lib/textBlocks'
 import { matchStandardFont } from '../../lib/pdfExport'
-import type { PageEdit, WorkingPage } from './types'
+import type { PageEdit, PdfRect, WorkingPage } from './types'
 import { TextEditOverlay } from './TextEditOverlay'
 import { CornerMarks } from './CornerMarks'
 import { ScanBar } from './ScanBar'
@@ -22,6 +22,16 @@ import { ScanBar } from './ScanBar'
 const DIALOG_SCALE = 2.2
 
 type TextEdit = Extract<PageEdit, { type: 'text' }>
+
+/** Loose equality for bounding boxes recorded at different times — same detection run, so this only needs to absorb floating-point noise, not real drift. */
+function sameRect(a: PdfRect, b: PdfRect, epsilon = 0.05): boolean {
+  return (
+    Math.abs(a.x - b.x) <= epsilon &&
+    Math.abs(a.y - b.y) <= epsilon &&
+    Math.abs(a.width - b.width) <= epsilon &&
+    Math.abs(a.height - b.height) <= epsilon
+  )
+}
 
 interface TextEditDialogProps {
   doc: PDFDocumentProxy
@@ -60,6 +70,19 @@ export function TextEditDialog({
   const [viewport, setViewport] = useState<PageViewport | null>(null)
   const [displayScale, setDisplayScale] = useState(1)
   const [textBlocks, setTextBlocks] = useState<TextBlock[] | null>(null)
+  // Blocks with a committed edit, keyed by block id — seeded from this page's
+  // existing `edits` (so reopening the dialog still shows prior edits instead
+  // of the freshly re-detected original text) and updated as new edits land
+  // this session. Kept separate from `textBlocks` itself since the blocks are
+  // re-derived from the untouched pdf.js document, not from `page.edits`.
+  const [editedTextByBlockId, setEditedTextByBlockId] = useState<Record<string, string>>({})
+  // Read inside the block-loading effect below without making that effect
+  // re-run (and remount the overlay, losing focus) every time a commit
+  // updates `page.edits` — it only needs the value as of when blocks load.
+  const pageEditsRef = useRef(page.edits)
+  useEffect(() => {
+    pageEditsRef.current = page.edits
+  })
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -93,7 +116,25 @@ export function TextEditDialog({
   useEffect(() => {
     let cancelled = false
     getTextBlocks(doc, page.sourcePageNumber).then((blocks) => {
-      if (!cancelled) setTextBlocks(blocks)
+      if (cancelled) return
+      setTextBlocks(blocks)
+
+      // Seed already-committed edits for this page (from a prior editing
+      // session) onto the freshly re-detected blocks, matched by bounding
+      // box — otherwise reopening this dialog would show the original,
+      // un-edited text again even though the page already has an edit.
+      const textEdits = pageEditsRef.current.filter(
+        (edit): edit is TextEdit => edit.type === 'text',
+      )
+      if (textEdits.length === 0) return
+      const seeded: Record<string, string> = {}
+      for (const block of blocks) {
+        // Later edits to the same spot are appended after earlier ones, so
+        // the last match is the current text.
+        const match = [...textEdits].reverse().find((edit) => sameRect(edit.boundingBox, block.boundingBox))
+        if (match) seeded[block.id] = match.newText
+      }
+      setEditedTextByBlockId(seeded)
     })
     return () => {
       cancelled = true
@@ -117,6 +158,21 @@ export function TextEditDialog({
   }, [closeAndCommitPending])
 
   const handleCommitBlock = (block: TextBlock, newText: string) => {
+    // Keep the overlay's own record of this block's current text in sync
+    // regardless of whether it matches the pristine original — this is what
+    // keeps the block visibly showing what was typed once it loses focus,
+    // instead of reverting to the untouched canvas underneath. Typing back
+    // to the exact original text drops the override so it blends in again.
+    setEditedTextByBlockId((current) => {
+      if (newText === block.text) {
+        if (!(block.id in current)) return current
+        const next = { ...current }
+        delete next[block.id]
+        return next
+      }
+      return { ...current, [block.id]: newText }
+    })
+
     if (newText === block.text) return
     onApplyTextEdit({
       type: 'text',
@@ -186,11 +242,19 @@ export function TextEditDialog({
               className="max-w-[88vw] rounded bg-surface object-contain shadow"
             />
             {status === 'ready' && <CornerMarks />}
-            {viewport && textBlocks && (
+            {/* Also gated on `status === 'ready'`, not just viewport/textBlocks
+                being loaded: `displayScale` only gets corrected away from its
+                `useState(1)` default once the canvas finishes rendering (the
+                effect above is itself gated on `status === 'ready'`), so
+                mounting the overlay any earlier would position every block
+                using the wrong scale for one frame, then visibly snap to the
+                correct position right as the page becomes interactive. */}
+            {status === 'ready' && viewport && textBlocks && (
               <TextEditOverlay
                 blocks={textBlocks}
                 viewport={viewport}
                 displayScale={displayScale}
+                editedTextByBlockId={editedTextByBlockId}
                 onCommit={handleCommitBlock}
               />
             )}

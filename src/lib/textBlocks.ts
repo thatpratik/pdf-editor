@@ -28,6 +28,12 @@ export interface TextBlock {
 // numbers were tuned against hand-built sample documents, not derived
 // analytically. Expect to retune against real-world documents.
 const LINE_Y_EPSILON = 2
+// A normal word-space is roughly 0.2-0.3x the font size. Anything much wider
+// than that on the same baseline (a form label next to a far-right value, an
+// item name next to its price) is two unrelated pieces of text, not one
+// line — joining them would collapse the true gap to a single space and
+// re-render the second piece flush against the first one's left edge.
+const LINE_SEGMENT_GAP_FACTOR = 2.5
 const BLOCK_LINE_GAP_FACTOR = 1.6
 const BLOCK_LEFT_ALIGN_TOLERANCE = 12
 // Two lines only belong to the same wrapped paragraph if they're roughly the
@@ -96,19 +102,41 @@ export async function getTextBlocks(
 
 function groupIntoLines(items: PositionedItem[]): PositionedItem[][] {
   const sorted = [...items].sort((a, b) => b.y - a.y || a.x - b.x)
-  const lines: PositionedItem[][] = []
+  const rows: PositionedItem[][] = []
 
   for (const item of sorted) {
-    const line = lines.find((candidate) => Math.abs(candidate[0].y - item.y) <= LINE_Y_EPSILON)
-    if (line) {
-      line.push(item)
+    const row = rows.find((candidate) => Math.abs(candidate[0].y - item.y) <= LINE_Y_EPSILON)
+    if (row) {
+      row.push(item)
     } else {
-      lines.push([item])
+      rows.push([item])
     }
   }
 
-  lines.forEach((line) => line.sort((a, b) => a.x - b.x))
-  lines.sort((a, b) => b[0].y - a[0].y)
+  // A shared baseline alone doesn't mean two items belong together. Split a
+  // same-baseline row into separate segments wherever the gap between
+  // adjacent items is far wider than a normal word space, so each visually
+  // distinct piece of text (a label vs. its right-aligned value, an item
+  // name vs. its price) keeps its own true position instead of being fused
+  // into one line anchored at the leftmost item's x.
+  const lines: PositionedItem[][] = []
+  for (const row of rows) {
+    row.sort((a, b) => a.x - b.x)
+    let segment: PositionedItem[] = [row[0]]
+    for (let i = 1; i < row.length; i++) {
+      const previous = segment[segment.length - 1]
+      const gap = row[i].x - (previous.x + previous.width)
+      if (gap > previous.fontSize * LINE_SEGMENT_GAP_FACTOR) {
+        lines.push(segment)
+        segment = [row[i]]
+      } else {
+        segment.push(row[i])
+      }
+    }
+    lines.push(segment)
+  }
+
+  lines.sort((a, b) => b[0].y - a[0].y || a[0].x - b[0].x)
   return lines
 }
 

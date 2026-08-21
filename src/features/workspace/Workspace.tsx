@@ -242,14 +242,13 @@ function WorkspaceScreen() {
   // what's now the last page splits into nothing extra).
   const splitFileCount = splitAfterPageIds.size > 0 ? splitIntoRanges(pages, splitAfterPageIds).length : 0
 
-  const docsBySourceFileId = new Map(
-    sourceFiles.map((sourceFile) => [sourceFile.id, sourceFile.doc]),
-  )
+  const sourceFilesById = new Map(sourceFiles.map((sourceFile) => [sourceFile.id, sourceFile]))
   const selectedIndex = pages.findIndex((page) => page.id === selectedPageId)
   const selectedPage = selectedIndex === -1 ? null : pages[selectedIndex]
-  const selectedDoc = selectedPage
-    ? (docsBySourceFileId.get(selectedPage.sourceFileId) ?? null)
+  const selectedSourceFile = selectedPage
+    ? (sourceFilesById.get(selectedPage.sourceFileId) ?? null)
     : null
+  const selectedDoc = selectedSourceFile?.doc ?? null
 
   return (
     <div className="flex h-screen flex-col bg-paper">
@@ -437,10 +436,11 @@ function WorkspaceScreen() {
               />
             </div>
             <aside className="w-[26rem] shrink-0 overflow-y-auto border-l border-ink/10 bg-surface p-6">
-              {selectedPage && selectedDoc && (
+              {selectedPage && selectedDoc && selectedSourceFile && (
                 <PagePreview
                   doc={selectedDoc}
                   page={selectedPage}
+                  sourceFileName={selectedSourceFile.name}
                   position={selectedIndex + 1}
                   totalPages={pages.length}
                   onApplyTextEdit={(edit) =>

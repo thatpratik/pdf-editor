@@ -16,6 +16,8 @@ type ImageEdit = Extract<PageEdit, { type: 'image' }>
 interface PagePreviewProps {
   doc: PDFDocumentProxy
   page: WorkingPage
+  /** Name of the source file this page came from, shown as a title above the preview. */
+  sourceFileName: string
   /** 1-based position of this page within the current working set. */
   position: number
   totalPages: number
@@ -30,6 +32,7 @@ interface PagePreviewProps {
 export function PagePreview({
   doc,
   page,
+  sourceFileName,
   position,
   totalPages,
   onApplyTextEdit,
@@ -62,44 +65,44 @@ export function PagePreview({
   // narrow sidebar column, too cramped for multiple edit boxes and their
   // hover controls. Closing the other editor first avoids leaving a stale
   // dialog-behind-a-dialog state for no reason.
-  //
-  // Hidden for now (along with the "Edit text"/"Edit images" buttons below)
-  // — editing functionality isn't working properly.
-  // const handleOpenTextEdit = () => {
-  //   setIsEditingImages(false)
-  //   setIsEditingText(true)
-  // }
-  //
-  // const handleOpenImageEdit = () => {
-  //   setIsEditingText(false)
-  //   setIsEditingImages(true)
-  // }
+  const handleOpenTextEdit = () => {
+    setIsEditingImages(false)
+    setIsEditingText(true)
+  }
+
+  const handleOpenImageEdit = () => {
+    setIsEditingText(false)
+    setIsEditingImages(true)
+  }
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h2 className="font-mono text-sm font-medium text-ink/70">
-          Page {position} of {totalPages}
-        </h2>
+        <div className="min-w-0">
+          <p className="truncate font-mono text-[11px] text-ink/45" title={sourceFileName}>
+            {sourceFileName}
+          </p>
+          <h2 className="font-mono text-sm font-medium text-ink/70">
+            Page {position} of {totalPages}
+          </h2>
+        </div>
         <div className="flex items-center gap-1">
-          {/* Hidden for now — editing functionality isn't working properly.
-              <button
-                type="button"
-                onClick={handleOpenImageEdit}
-                disabled={status !== 'ready'}
-                className="rounded-md px-2 py-1 text-xs font-medium text-teal hover:bg-teal/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal disabled:cursor-not-allowed disabled:text-ink/25 disabled:hover:bg-transparent"
-              >
-                Edit images
-              </button>
-              <button
-                type="button"
-                onClick={handleOpenTextEdit}
-                disabled={status !== 'ready'}
-                className="rounded-md px-2 py-1 text-xs font-medium text-accent hover:bg-accent/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:text-ink/25 disabled:hover:bg-transparent"
-              >
-                Edit text
-              </button>
-          */}
+          {/* <button
+            type="button"
+            onClick={handleOpenImageEdit}
+            disabled={status !== 'ready'}
+            className="rounded-md px-2 py-1 text-xs font-medium text-teal hover:bg-teal/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal disabled:cursor-not-allowed disabled:text-ink/25 disabled:hover:bg-transparent"
+          >
+            Edit images
+          </button> */}
+          <button
+            type="button"
+            onClick={handleOpenTextEdit}
+            disabled={status !== 'ready'}
+            className="rounded-md px-2 py-1 text-xs font-medium text-accent hover:bg-accent/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:text-ink/25 disabled:hover:bg-transparent"
+          >
+            Edit text
+          </button>
         </div>
       </div>
 
