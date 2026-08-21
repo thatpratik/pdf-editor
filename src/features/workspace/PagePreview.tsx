@@ -4,10 +4,13 @@ import type { PDFDocumentProxy } from '../../lib/pdf'
 import { getPageViewport, renderPageToCanvas } from '../../lib/pdf'
 import { getTextBlocks } from '../../lib/textBlocks'
 import type { TextBlock } from '../../lib/textBlocks'
+import { getPageImageRegions } from '../../lib/imageRegions'
+import type { ImageRegion } from '../../lib/imageRegions'
 import { matchStandardFont } from '../../lib/pdfExport'
 import type { PageEdit, WorkingPage } from './types'
 import { Spinner } from './Spinner'
 import { TextEditOverlay } from './TextEditOverlay'
+import { ImageRegionOverlay } from './ImageRegionOverlay'
 
 /** Scale (before device-pixel-ratio) used for the larger single-page preview. */
 const PREVIEW_SCALE = 1.4
@@ -42,6 +45,8 @@ export function PagePreview({
   const [displayScale, setDisplayScale] = useState(1)
   const [isEditingText, setIsEditingText] = useState(false)
   const [textBlocks, setTextBlocks] = useState<TextBlock[] | null>(null)
+  const [isShowingImages, setIsShowingImages] = useState(false)
+  const [imageRegions, setImageRegions] = useState<ImageRegion[] | null>(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -49,6 +54,7 @@ export function PagePreview({
 
     setStatus('loading')
     setIsEditingText(false)
+    setIsShowingImages(false)
     const scale = PREVIEW_SCALE * (window.devicePixelRatio || 1)
     const handle = renderPageToCanvas(doc, page.sourcePageNumber, canvas, scale, page.rotation)
 
@@ -87,10 +93,29 @@ export function PagePreview({
     }
   }, [isEditingText, doc, page.sourcePageNumber])
 
+  useEffect(() => {
+    if (!isShowingImages) return
+    let cancelled = false
+    getPageImageRegions(doc, page.sourcePageNumber).then((regions) => {
+      if (!cancelled) setImageRegions(regions)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isShowingImages, doc, page.sourcePageNumber])
+
   const handleToggleEditText = () => {
     setIsEditingText((current) => {
       const next = !current
       if (!next) setTextBlocks(null)
+      return next
+    })
+  }
+
+  const handleToggleShowImages = () => {
+    setIsShowingImages((current) => {
+      const next = !current
+      if (!next) setImageRegions(null)
       return next
     })
   }
@@ -112,18 +137,32 @@ export function PagePreview({
         <h2 className="text-sm font-medium text-slate-700">
           Page {position} of {totalPages}
         </h2>
-        <button
-          type="button"
-          onClick={handleToggleEditText}
-          disabled={status !== 'ready'}
-          className={`rounded px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:text-slate-300 ${
-            isEditingText
-              ? 'bg-blue-600 text-white hover:bg-blue-700'
-              : 'text-blue-600 hover:bg-blue-50'
-          }`}
-        >
-          {isEditingText ? 'Done editing' : 'Edit text'}
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleToggleShowImages}
+            disabled={status !== 'ready'}
+            className={`rounded px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:text-slate-300 ${
+              isShowingImages
+                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                : 'text-emerald-600 hover:bg-emerald-50'
+            }`}
+          >
+            {isShowingImages ? 'Hide images' : 'Show images'}
+          </button>
+          <button
+            type="button"
+            onClick={handleToggleEditText}
+            disabled={status !== 'ready'}
+            className={`rounded px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:text-slate-300 ${
+              isEditingText
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'text-blue-600 hover:bg-blue-50'
+            }`}
+          >
+            {isEditingText ? 'Done editing' : 'Edit text'}
+          </button>
+        </div>
       </div>
 
       {isEditingText && !hasSeenTextEditCaveat && (
@@ -156,6 +195,13 @@ export function PagePreview({
               viewport={viewport}
               displayScale={displayScale}
               onCommit={handleCommitBlock}
+            />
+          )}
+          {isShowingImages && viewport && imageRegions && (
+            <ImageRegionOverlay
+              regions={imageRegions}
+              viewport={viewport}
+              displayScale={displayScale}
             />
           )}
         </div>
