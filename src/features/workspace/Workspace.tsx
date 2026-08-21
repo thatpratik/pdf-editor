@@ -7,7 +7,7 @@ import { zipPdfs } from '../../lib/zip'
 import { downloadBlob } from '../../lib/download'
 import { UploadDropzone } from './UploadDropzone'
 import { ThumbnailGrid } from './ThumbnailGrid'
-import { PagePreview } from './PagePreview'
+import { PagePreviewList } from './PagePreviewList'
 import { Spinner } from './Spinner'
 import { ThemeToggle } from './ThemeToggle'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -242,13 +242,8 @@ function WorkspaceScreen() {
   // what's now the last page splits into nothing extra).
   const splitFileCount = splitAfterPageIds.size > 0 ? splitIntoRanges(pages, splitAfterPageIds).length : 0
 
-  const sourceFilesById = new Map(sourceFiles.map((sourceFile) => [sourceFile.id, sourceFile]))
-  const selectedIndex = pages.findIndex((page) => page.id === selectedPageId)
-  const selectedPage = selectedIndex === -1 ? null : pages[selectedIndex]
-  const selectedSourceFile = selectedPage
-    ? (sourceFilesById.get(selectedPage.sourceFileId) ?? null)
-    : null
-  const selectedDoc = selectedSourceFile?.doc ?? null
+  const docsBySourceFileId = new Map(sourceFiles.map((sourceFile) => [sourceFile.id, sourceFile.doc]))
+  const sourceFileNamesById = new Map(sourceFiles.map((sourceFile) => [sourceFile.id, sourceFile.name]))
 
   return (
     <div className="flex h-screen flex-col bg-paper">
@@ -435,24 +430,21 @@ function WorkspaceScreen() {
                 onToggleSplitAfter={handleToggleSplitAfter}
               />
             </div>
-            <aside className="w-[26rem] shrink-0 overflow-y-auto border-l border-ink/10 bg-surface p-6">
-              {selectedPage && selectedDoc && selectedSourceFile && (
-                <PagePreview
-                  doc={selectedDoc}
-                  page={selectedPage}
-                  sourceFileName={selectedSourceFile.name}
-                  position={selectedIndex + 1}
-                  totalPages={pages.length}
-                  onApplyTextEdit={(edit) =>
-                    dispatch({ type: 'APPLY_TEXT_EDIT', pageId: selectedPage.id, edit })
-                  }
-                  onApplyImageEdit={(edit) =>
-                    dispatch({ type: 'APPLY_IMAGE_EDIT', pageId: selectedPage.id, edit })
-                  }
-                  hasSeenEditCaveat={hasSeenEditCaveat}
-                  onDismissEditCaveat={() => setHasSeenEditCaveat(true)}
-                />
-              )}
+            <aside className="w-[34rem] shrink-0 overflow-y-auto border-l border-ink/10 bg-surface p-6">
+              <PagePreviewList
+                pages={pages}
+                docsBySourceFileId={docsBySourceFileId}
+                sourceFileNamesById={sourceFileNamesById}
+                selectedPageId={selectedPageId}
+                onSelect={setSelectedPageId}
+                onReorder={(fromIndex, toIndex) =>
+                  dispatch({ type: 'REORDER_PAGES', fromIndex, toIndex })
+                }
+                onApplyTextEdit={(pageId, edit) => dispatch({ type: 'APPLY_TEXT_EDIT', pageId, edit })}
+                onApplyImageEdit={(pageId, edit) => dispatch({ type: 'APPLY_IMAGE_EDIT', pageId, edit })}
+                hasSeenEditCaveat={hasSeenEditCaveat}
+                onDismissEditCaveat={() => setHasSeenEditCaveat(true)}
+              />
             </aside>
           </div>
         )}
