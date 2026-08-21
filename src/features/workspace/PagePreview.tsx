@@ -2,15 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import type { PageViewport } from 'pdfjs-dist'
 import type { PDFDocumentProxy } from '../../lib/pdf'
 import { getPageViewport, renderPageToCanvas } from '../../lib/pdf'
-import { getTextBlocks } from '../../lib/textBlocks'
-import type { TextBlock } from '../../lib/textBlocks'
 import { getPageImageRegions } from '../../lib/imageRegions'
 import type { ImageRegion } from '../../lib/imageRegions'
-import { matchStandardFont } from '../../lib/pdfExport'
 import type { PageEdit, WorkingPage } from './types'
 import { Spinner } from './Spinner'
-import { TextEditOverlay } from './TextEditOverlay'
 import { ImageRegionOverlay } from './ImageRegionOverlay'
+import { TextEditDialog } from './TextEditDialog'
 
 /** Scale (before device-pixel-ratio) used for the larger single-page preview. */
 const PREVIEW_SCALE = 1.4
@@ -44,7 +41,6 @@ export function PagePreview({
   const [viewport, setViewport] = useState<PageViewport | null>(null)
   const [displayScale, setDisplayScale] = useState(1)
   const [isEditingText, setIsEditingText] = useState(false)
-  const [textBlocks, setTextBlocks] = useState<TextBlock[] | null>(null)
   const [isShowingImages, setIsShowingImages] = useState(false)
   const [imageRegions, setImageRegions] = useState<ImageRegion[] | null>(null)
 
@@ -66,7 +62,7 @@ export function PagePreview({
 
   // The canvas's backing-store resolution (for sharpness) differs from its
   // displayed CSS size (clamped by max-h-[75vh]/max-w-full) — this factor
-  // is what lets the text-edit overlay line up with the visible page.
+  // is what lets the image-region overlay line up with the visible page.
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas || status !== 'ready') return
@@ -83,17 +79,6 @@ export function PagePreview({
   }, [status])
 
   useEffect(() => {
-    if (!isEditingText) return
-    let cancelled = false
-    getTextBlocks(doc, page.sourcePageNumber).then((blocks) => {
-      if (!cancelled) setTextBlocks(blocks)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [isEditingText, doc, page.sourcePageNumber])
-
-  useEffect(() => {
     if (!isShowingImages) return
     let cancelled = false
     getPageImageRegions(doc, page.sourcePageNumber).then((regions) => {
@@ -104,12 +89,15 @@ export function PagePreview({
     }
   }, [isShowingImages, doc, page.sourcePageNumber])
 
-  const handleToggleEditText = () => {
-    setIsEditingText((current) => {
-      const next = !current
-      if (!next) setTextBlocks(null)
-      return next
-    })
+  // Text editing opens in its own full-screen `TextEditDialog` rather than
+  // overlaying edit boxes on this panel — the panel is a fixed, fairly
+  // narrow sidebar column, too cramped for multiple edit boxes and their
+  // hover controls. Closing images first avoids leaving a stale "Show
+  // images" overlay active behind the dialog for no reason.
+  const handleOpenTextEdit = () => {
+    setIsShowingImages(false)
+    setImageRegions(null)
+    setIsEditingText(true)
   }
 
   const handleToggleShowImages = () => {
@@ -117,17 +105,6 @@ export function PagePreview({
       const next = !current
       if (!next) setImageRegions(null)
       return next
-    })
-  }
-
-  const handleCommitBlock = (block: TextBlock, newText: string) => {
-    if (newText === block.text) return
-    onApplyTextEdit({
-      type: 'text',
-      boundingBox: block.boundingBox,
-      newText,
-      fontKey: matchStandardFont(block.fontFamilyHint),
-      fontSize: block.fontSize,
     })
   }
 
@@ -142,7 +119,7 @@ export function PagePreview({
             type="button"
             onClick={handleToggleShowImages}
             disabled={status !== 'ready'}
-            className={`rounded px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:text-slate-300 ${
+            className={`rounded px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent ${
               isShowingImages
                 ? 'bg-emerald-600 text-white hover:bg-emerald-700'
                 : 'text-emerald-600 hover:bg-emerald-50'
@@ -152,35 +129,14 @@ export function PagePreview({
           </button>
           <button
             type="button"
-            onClick={handleToggleEditText}
+            onClick={handleOpenTextEdit}
             disabled={status !== 'ready'}
-            className={`rounded px-2 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:text-slate-300 ${
-              isEditingText
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'text-blue-600 hover:bg-blue-50'
-            }`}
+            className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
           >
-            {isEditingText ? 'Done editing' : 'Edit text'}
+            Edit text
           </button>
         </div>
       </div>
-
-      {isEditingText && !hasSeenTextEditCaveat && (
-        <div className="flex items-start justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          <span>
-            Edited or covered text isn&apos;t fully removed from the file — it&apos;s visually
-            replaced, but the original content can still be recovered by inspecting the PDF
-            directly.
-          </span>
-          <button
-            type="button"
-            onClick={onDismissTextEditCaveat}
-            className="shrink-0 font-medium hover:underline"
-          >
-            Got it
-          </button>
-        </div>
-      )}
 
       <div className="relative flex min-h-96 items-center justify-center rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
         {/* inline-block so this wrapper's box exactly matches the canvas's
@@ -189,14 +145,6 @@ export function PagePreview({
             the canvas regardless of how much empty space surrounds it. */}
         <div className="relative inline-block">
           <canvas ref={canvasRef} className="max-h-[75vh] max-w-full rounded object-contain" />
-          {isEditingText && viewport && textBlocks && (
-            <TextEditOverlay
-              blocks={textBlocks}
-              viewport={viewport}
-              displayScale={displayScale}
-              onCommit={handleCommitBlock}
-            />
-          )}
           {isShowingImages && viewport && imageRegions && (
             <ImageRegionOverlay
               regions={imageRegions}
@@ -216,6 +164,19 @@ export function PagePreview({
           </div>
         )}
       </div>
+
+      {isEditingText && (
+        <TextEditDialog
+          doc={doc}
+          page={page}
+          position={position}
+          totalPages={totalPages}
+          onApplyTextEdit={onApplyTextEdit}
+          hasSeenTextEditCaveat={hasSeenTextEditCaveat}
+          onDismissTextEditCaveat={onDismissTextEditCaveat}
+          onClose={() => setIsEditingText(false)}
+        />
+      )}
     </div>
   )
 }
