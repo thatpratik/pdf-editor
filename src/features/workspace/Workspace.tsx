@@ -232,14 +232,17 @@ function WorkspaceScreen() {
   return (
     <div className="flex h-screen flex-col bg-slate-50">
       <header className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900">PDF Editor</h1>
-          {pages.length > 0 && (
-            <p className="text-xs text-slate-500">
-              {sourceFiles.length} {sourceFiles.length === 1 ? 'file' : 'files'} · {pages.length}{' '}
-              {pages.length === 1 ? 'page' : 'pages'}
-            </p>
-          )}
+        <div className="flex items-center gap-2.5">
+          <img src="/favicon.svg" alt="" aria-hidden="true" className="h-6 w-6" />
+          <div>
+            <h1 className="text-lg font-semibold tracking-tight text-slate-900">PDF Editor</h1>
+            {pages.length > 0 && (
+              <p className="text-xs text-slate-500">
+                {sourceFiles.length} {sourceFiles.length === 1 ? 'file' : 'files'} ·{' '}
+                {pages.length} {pages.length === 1 ? 'page' : 'pages'}
+              </p>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-4">
           {(canUndo || canRedo) && (
@@ -367,21 +370,21 @@ function WorkspaceScreen() {
         )}
 
         {pages.length === 0 && uploadStatus === 'loading' && (
-          <div className="flex h-full items-center justify-center gap-3 text-slate-500">
+          <div className="flex h-full items-center justify-center gap-3 text-slate-600">
             <Spinner />
-            <span>Loading PDF…</span>
+            <span className="text-base font-medium">Loading PDF…</span>
           </div>
         )}
 
         {pages.length === 0 && uploadStatus === 'error' && (
           <div className="flex h-full items-center justify-center p-8">
-            <div className="max-w-md rounded-xl border border-red-200 bg-red-50 px-8 py-10 text-center">
+            <div className="max-w-md rounded-2xl border border-red-200 bg-red-50 px-8 py-10 text-center shadow-sm">
               <p className="text-base font-medium text-red-700">Couldn&apos;t open this file</p>
               <p className="mt-2 text-sm text-red-600">{uploadError}</p>
               <button
                 type="button"
                 onClick={() => setUploadStatus('idle')}
-                className="mt-6 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+                className="mt-6 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
               >
                 Try another file
               </button>
